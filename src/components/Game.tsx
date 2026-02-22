@@ -1055,8 +1055,15 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
       window.removeEventListener('touchend', handleTouchEnd);
       cancelAnimationFrame(animationId);
     };
-  }, [car, driver, car2, driver2, onGameOver, mode, level, targetDistance]);
-
+}, [
+  car.id,
+  driver.id,
+  car2?.id,
+  driver2?.id,
+  mode,
+  level,
+  targetDistance
+]);
   return (
     <div className="relative flex flex-col items-center justify-center w-full h-full bg-slate-900 text-white font-sans p-4">
       <div className="w-full max-w-4xl relative">
