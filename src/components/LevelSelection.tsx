@@ -14,8 +14,8 @@ export default function LevelSelection({ onNavigate, world, levels, onSelectLeve
   const levelsCount = WORLDS[world as keyof typeof WORLDS].levels;
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6 overflow-y-auto">
-      <div className="max-w-4xl mx-auto">
+    <div className="flex flex-col items-center min-h-screen bg-slate-900 text-white p-6 overflow-y-auto overflow-x-hidden">
+      <div className="max-w-4xl w-full mx-auto py-12">
         <div className="flex items-center mb-12">
           <button
             onClick={() => onNavigate('world_select')}

@@ -7,6 +7,7 @@ import ModeSelection from './components/ModeSelection';
 import WorldSelection from './components/WorldSelection';
 import LevelSelection from './components/LevelSelection';
 import Codes from './components/Codes';
+import MultiplayerSetup from './components/MultiplayerSetup';
 import { Screen, PlayerState, CarId, DriverId, GameMode } from './types';
 import { CARS, DRIVERS, INITIAL_STATE, WORLDS, BASE_LEVEL_DISTANCE, LEVEL_DISTANCE_INCREMENT } from './constants';
 import { Star } from 'lucide-react';
@@ -44,13 +45,13 @@ export default function App() {
     return INITIAL_STATE;
   });
 
-  const [gameOverStats, setGameOverStats] = useState<{coins: number, score: number, stars?: number, victory?: boolean, starBonus?: number} | null>(null);
+  const [gameOverStats, setGameOverStats] = useState<{coins: number, score: number, stars?: number, victory?: boolean, starBonus?: number, winner?: string} | null>(null);
 
   useEffect(() => {
     localStorage.setItem('neonRacerStateV4', JSON.stringify(gameState));
   }, [gameState]);
 
-  const handleGameOver = (coinsEarned: number, score: number, stars: number = 0, victory: boolean = false) => {
+  const handleGameOver = (coinsEarned: number, score: number, stars: number = 0, victory: boolean = false, winner?: string) => {
     let starBonus = 0;
     if (gameMode === 'levels' && victory) {
       starBonus = (stars * 10) + (selectedLevel - 1) * 5 + (selectedWorld - 1) * 100;
@@ -89,7 +90,7 @@ export default function App() {
       return newState;
     });
 
-    setGameOverStats({ coins: coinsEarned, score, stars, victory, starBonus });
+    setGameOverStats({ coins: coinsEarned, score, stars, victory, starBonus, winner });
     setScreen('menu');
   };
 
@@ -97,6 +98,8 @@ export default function App() {
     setGameMode(mode);
     if (mode === 'infinite') {
       setScreen('game');
+    } else if (mode === 'multiplayer') {
+      setScreen('multiplayer_setup');
     } else {
       setScreen('world_select');
     }
@@ -125,7 +128,7 @@ export default function App() {
     setGameState(prev => ({
       ...prev,
       coins: prev.coins - cost,
-      ownedCars: [...prev.ownedCars, id]
+      ownedCars: Array.from(new Set([...(prev.ownedCars || []), id]))
     }));
   };
 
@@ -133,7 +136,7 @@ export default function App() {
     setGameState(prev => ({
       ...prev,
       coins: prev.coins - cost,
-      ownedDrivers: [...prev.ownedDrivers, id]
+      ownedDrivers: Array.from(new Set([...(prev.ownedDrivers || []), id]))
     }));
   };
 
@@ -151,6 +154,20 @@ export default function App() {
     }));
   };
 
+  const handleSelectCar2 = (id: CarId) => {
+    setGameState(prev => ({
+      ...prev,
+      selectedCar2: id
+    }));
+  };
+
+  const handleSelectDriver2 = (id: DriverId) => {
+    setGameState(prev => ({
+      ...prev,
+      selectedDriver2: id
+    }));
+  };
+
   const handleRedeemCode = (code: string): 'success' | 'used' | 'error' => {
     const upperCode = code.toUpperCase();
     
@@ -158,7 +175,7 @@ export default function App() {
       setGameState(prev => ({
         ...prev,
         ownedCars: Object.keys(CARS) as CarId[],
-        ownedDrivers: (Object.keys(DRIVERS) as DriverId[]).filter(id => id !== 'prime' && id !== 'kalleb')
+        ownedDrivers: (Object.keys(DRIVERS) as DriverId[]).filter(id => id !== 'prime')
       }));
       return 'success';
     }
@@ -166,7 +183,7 @@ export default function App() {
     if (upperCode === 'WVFH') {
       setGameState(prev => ({
         ...prev,
-        ownedDrivers: Array.from(new Set([...prev.ownedDrivers, 'prime' as DriverId]))
+        ownedDrivers: Array.from(new Set([...(prev.ownedDrivers || []), 'prime' as DriverId]))
       }));
       return 'success';
     }
@@ -222,6 +239,12 @@ export default function App() {
                 <h2 className={`text-4xl font-black italic mb-2 ${gameOverStats.victory ? 'text-green-500' : 'text-red-500'}`}>
                   {gameOverStats.victory ? 'VITÓRIA!' : 'FIM DE JOGO'}
                 </h2>
+                
+                {gameOverStats.winner && (
+                  <div className="text-2xl font-black text-yellow-500 mb-4 animate-bounce uppercase tracking-tighter">
+                    VENCEDOR: {gameOverStats.winner}
+                  </div>
+                )}
                 
                 {gameMode === 'levels' && gameOverStats.victory && (
                   <div className="flex justify-center gap-2 my-4">
@@ -299,6 +322,8 @@ export default function App() {
         <Game 
           car={CARS[gameState.selectedCar]} 
           driver={DRIVERS[gameState.selectedDriver]}
+          car2={gameMode === 'multiplayer' ? CARS[gameState.selectedCar2 || 'basic'] : undefined}
+          driver2={gameMode === 'multiplayer' ? DRIVERS[gameState.selectedDriver2 || 'rookie'] : undefined}
           mode={gameMode}
           world={selectedWorld}
           level={selectedLevel}
@@ -333,6 +358,23 @@ export default function App() {
         <Codes 
           onNavigate={setScreen}
           onRedeem={handleRedeemCode}
+        />
+      )}
+
+      {screen === 'multiplayer_setup' && (
+        <MultiplayerSetup
+          onNavigate={setScreen}
+          ownedCars={gameState.ownedCars}
+          ownedDrivers={gameState.ownedDrivers}
+          selectedCar1={gameState.selectedCar}
+          selectedDriver1={gameState.selectedDriver}
+          selectedCar2={gameState.selectedCar2 || 'basic'}
+          selectedDriver2={gameState.selectedDriver2 || 'rookie'}
+          onSelectCar1={handleSelectCar}
+          onSelectDriver1={handleSelectDriver}
+          onSelectCar2={handleSelectCar2}
+          onSelectDriver2={handleSelectDriver2}
+          onStart={() => setScreen('game')}
         />
       )}
     </div>

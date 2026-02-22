@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Infinity, Trophy } from 'lucide-react';
+import { ArrowLeft, Infinity, Trophy, Users } from 'lucide-react';
 import { Screen, GameMode } from '../types';
 
 interface ModeSelectionProps {
@@ -9,8 +9,8 @@ interface ModeSelectionProps {
 
 export default function ModeSelection({ onNavigate, onSelectMode }: ModeSelectionProps) {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-900 text-white p-6">
-      <div className="max-w-md w-full">
+    <div className="flex flex-col items-center min-h-screen bg-slate-900 text-white p-6 overflow-y-auto overflow-x-hidden">
+      <div className="max-w-md w-full py-12">
         <div className="flex items-center mb-12">
           <button
             onClick={() => onNavigate('menu')}
@@ -44,7 +44,20 @@ export default function ModeSelection({ onNavigate, onSelectMode }: ModeSelectio
             </div>
             <div className="text-center">
               <h2 className="text-2xl font-bold mb-1">NÍVEIS</h2>
-              <p className="text-slate-400 text-sm">10 desafios com linha de chegada.</p>
+              <p className="text-slate-400 text-sm">Desafios com linha de chegada.</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => onSelectMode('multiplayer')}
+            className="group relative flex flex-col items-center gap-4 bg-slate-800 hover:bg-slate-700 p-8 rounded-3xl border-2 border-slate-700 hover:border-green-500 transition-all hover:scale-105"
+          >
+            <div className="p-4 bg-green-500/20 rounded-2xl">
+              <Users className="w-12 h-12 text-green-400" />
+            </div>
+            <div className="text-center">
+              <h2 className="text-2xl font-bold mb-1">MULTIPLAYER</h2>
+              <p className="text-slate-400 text-sm">Local: WASD vs Setas!</p>
             </div>
           </button>
         </div>

@@ -27,8 +27,8 @@ export default function WorldSelection({ onNavigate, levels, onSelectWorld }: Wo
   };
 
   return (
-    <div className="h-full bg-slate-900 text-white p-6 overflow-y-auto">
-      <div className="max-w-4xl mx-auto">
+    <div className="flex flex-col items-center min-h-screen bg-slate-900 text-white p-6 overflow-y-auto overflow-x-hidden">
+      <div className="max-w-4xl w-full mx-auto py-12">
         <div className="flex items-center mb-8">
           <button
             onClick={() => onNavigate('mode_select')}

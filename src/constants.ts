@@ -31,6 +31,7 @@ export const DRIVERS: Record<DriverId, Driver> = {
   collector: { id: 'collector', name: 'Colecionador', description: 'Adora dinheiro.', abilityName: 'Ímã de Moedas', abilityDescription: 'Atrai todas as moedas próximas por 5 segundos.', cost: 300, world: 1 },
   ghost: { id: 'ghost', name: 'Fantasma', description: 'Misterioso e sombrio.', abilityName: 'Intangível', abilityDescription: 'Atravessa obstáculos sem sofrer dano por 5 segundos.', cost: 500, world: 1 },
   tech: { id: 'tech', name: 'Tecnólogo', description: 'Mestre da computação.', abilityName: 'Hack de Tempo', abilityDescription: 'Reduz a velocidade de tudo ao redor por 5 segundos.', cost: 800, world: 1 },
+  kalleb: { id: 'kalleb', name: 'Kalleb', description: 'Mestre da artilharia pesada.', abilityName: 'Mísseis Homing', abilityDescription: 'Lança 3 mísseis teleguiados nos inimigos mais próximos.', cost: 1500, world: 1 },
   nees: { id: 'nees', name: 'Nees', description: 'Especialista em reparos.', abilityName: 'Reparo Rápido', abilityDescription: 'Recupera 1 ponto de vida se o carro estiver danificado.', cost: 1800, world: 1 },
   
   // Mundo 2
@@ -38,7 +39,6 @@ export const DRIVERS: Record<DriverId, Driver> = {
   chrono: { id: 'chrono', name: 'Chrono', description: 'Controla o fluxo do tempo.', abilityName: 'Parada Temporal', abilityDescription: 'Congela todos os inimigos por 3 segundos.', cost: 3000, world: 2 },
   mender: { id: 'mender', name: 'Mender', description: 'Nanotecnologia de reparo.', abilityName: 'Auto-Reparo', abilityDescription: 'Recupera toda a vida do carro.', cost: 4500, world: 2 },
   stellar: { id: 'stellar', name: 'Stellar', description: 'Energia cósmica pura.', abilityName: 'Supernova', abilityDescription: 'Fica invencível e ultra rápido por 8 segundos.', cost: 9000, world: 2 },
-  kalleb: { id: 'kalleb', name: 'Kalleb', description: 'Mestre da artilharia pesada.', abilityName: 'Mísseis Homing', abilityDescription: 'Lança 3 mísseis teleguiados nos inimigos mais próximos.', cost: 12000, world: 2 },
   prime: { id: 'prime', name: 'Prime', description: 'O motorista definitivo.', abilityName: 'Modo Deus', abilityDescription: 'Invencibilidade, velocidade e ímã permanentes por 10s.', cost: 15000, world: 0 }
 };
 
@@ -55,8 +55,10 @@ export const INITIAL_STATE: PlayerState = {
   coins: 0,
   ownedCars: ['basic'],
   selectedCar: 'basic',
+  selectedCar2: 'basic',
   ownedDrivers: ['rookie'],
   selectedDriver: 'rookie',
+  selectedDriver2: 'rookie',
   highScore: 0,
   levels: {
     1: {

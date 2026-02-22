@@ -55,7 +55,7 @@ export default function Garage({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
-          {tab === 'cars' && [...ownedCars]
+          {tab === 'cars' && [...(ownedCars || [])]
             .filter(id => !!CARS[id])
             .sort((a, b) => CARS[a].cost - CARS[b].cost)
             .map((id) => {
@@ -95,7 +95,7 @@ export default function Garage({
             );
           })}
 
-          {tab === 'drivers' && [...ownedDrivers]
+          {tab === 'drivers' && [...(ownedDrivers || [])]
             .filter(id => !!DRIVERS[id])
             .sort((a, b) => DRIVERS[a].cost - DRIVERS[b].cost)
             .map((id) => {

@@ -33,12 +33,14 @@ export interface PlayerState {
   coins: number;
   ownedCars: CarId[];
   selectedCar: CarId;
+  selectedCar2?: CarId;
   ownedDrivers: DriverId[];
   selectedDriver: DriverId;
+  selectedDriver2?: DriverId;
   highScore: number;
   levels: Record<number, Record<number, LevelProgress>>; // world -> level -> progress
   usedCodes: string[];
 }
 
-export type Screen = 'menu' | 'game' | 'shop' | 'garage' | 'mode_select' | 'world_select' | 'level_select' | 'codes';
-export type GameMode = 'infinite' | 'levels';
+export type Screen = 'menu' | 'game' | 'shop' | 'garage' | 'mode_select' | 'world_select' | 'level_select' | 'codes' | 'multiplayer_setup';
+export type GameMode = 'infinite' | 'levels' | 'multiplayer';

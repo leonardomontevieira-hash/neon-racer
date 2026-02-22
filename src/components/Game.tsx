@@ -5,22 +5,28 @@ import { BASE_LEVEL_DISTANCE, LEVEL_DISTANCE_INCREMENT } from '../constants';
 interface GameProps {
   car: Car;
   driver: Driver;
-  mode: 'infinite' | 'levels';
+  car2?: Car;
+  driver2?: Driver;
+  mode: 'infinite' | 'levels' | 'multiplayer';
   world?: number;
   level?: number;
-  onGameOver: (coins: number, score: number, stars?: number, victory?: boolean) => void;
+  onGameOver: (coins: number, score: number, stars?: number, victory?: boolean, winner?: string) => void;
 }
 
-export default function Game({ car, driver, mode, world = 1, level, onGameOver }: GameProps) {
+export default function Game({ car, driver, car2, driver2, mode, world = 1, level, onGameOver }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [abilityReady, setAbilityReady] = useState(true);
   const [abilityActive, setAbilityActive] = useState(false);
+  const [abilityReady2, setAbilityReady2] = useState(true);
+  const [abilityActive2, setAbilityActive2] = useState(false);
   const [score, setScore] = useState(0);
   const [coinsCollected, setCoinsCollected] = useState(0);
   const [health, setHealth] = useState(3);
+  const [health2, setHealth2] = useState(3);
+  const [isPaused, setIsPaused] = useState(false);
 
   const worldOffset = (world - 1) * 500;
-  const targetDistance = mode === 'levels' && level ? worldOffset + BASE_LEVEL_DISTANCE + (level - 1) * LEVEL_DISTANCE_INCREMENT : Infinity;
+  const targetDistance = mode === 'levels' && level ? worldOffset + BASE_LEVEL_DISTANCE + (level - 1) * LEVEL_DISTANCE_INCREMENT : (mode === 'multiplayer' ? 2000 : Infinity);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -31,11 +37,13 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
     let animationId: number;
     let lastTime = performance.now();
     let keys: { [key: string]: boolean } = {};
+    let isDragging = false;
+    let dragOffsetY = 0;
 
-    const isRaceMode = mode === 'levels' && (world === 2 || (world === 1 && level === 10));
+    const isRaceMode = (mode === 'levels' && (world === 2 || (world === 1 && level === 10))) || mode === 'multiplayer';
     const player = {
       x: 100,
-      y: isRaceMode ? 30 : canvas.height / 2 - 20, // Start in lane 1 if racing
+      y: isRaceMode ? 30 : canvas.height / 2 - 40,
       width: 70,
       height: 40,
       baseSpeedX: car.speed * 1.5,
@@ -49,6 +57,22 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
       isEMPActive: false,
     };
 
+    const player2 = (car2 && driver2) ? {
+      x: 100,
+      y: isRaceMode ? 90 : canvas.height / 2 + 40,
+      width: 70,
+      height: 40,
+      baseSpeedX: car2.speed * 1.5,
+      abilityTimer: 0,
+      abilityCooldown: 0,
+      isInvincible: false,
+      isMagnet: false,
+      isBulldozer: false,
+      isTimeHacked: false,
+      isTimeStopped: false,
+      isEMPActive: false,
+    } : null;
+
     const enemies: any[] = [];
     const coins: any[] = [];
     const particles: any[] = [];
@@ -56,8 +80,10 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
     const missiles: any[] = [];
     let roadOffset = 0;
     let distance = 0;
+    let distance2 = 0;
     let sessionCoins = 0;
-    let currentHealth = 3;
+    let currentHealth = health;
+    let currentHealth2 = health2;
     let finished = false;
     let shake = 0;
     let countdown = isRaceMode ? 3 : 0;
@@ -67,7 +93,7 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
     const levelDifficulty = (world - 1) * 10 + level;
     const baseRivalSpeed = 2.5 + (levelDifficulty * 0.4); // Adjusted for better progression
 
-    if (isRaceMode) {
+    if (isRaceMode && mode !== 'multiplayer') {
       const rivalCount = world === 1 ? 1 : 5;
       for (let i = 0; i < rivalCount; i++) {
         rivals.push({
@@ -122,7 +148,86 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
     let enemySpawnTimer = 0;
     let coinSpawnTimer = 0;
 
+    const activateAbility = (d: Driver, p: any, setReady: any, setActive: any, pHealth: number, setPHealth: any, ownerId: number) => {
+      if (d.id === 'maruto') {
+        shurikens.push({
+          x: p.x + p.width,
+          y: p.y + p.height / 2,
+          radius: 15,
+          speed: 15,
+          rotation: 0,
+          ownerId
+        });
+        p.abilityTimer = 500;
+      } else if (d.id === 'overlord') {
+        enemies.forEach(e => {
+          createExplosion(e.x + e.width/2, e.y + e.height/2, e.color, true);
+        });
+        enemies.length = 0;
+        p.abilityTimer = 500;
+      } else if (d.id === 'nees') {
+        if (pHealth < 3) {
+          setPHealth(pHealth + 1);
+          createExplosion(p.x + p.width/2, p.y + p.height/2, '#4ade80', false);
+          p.abilityTimer = 500;
+        } else {
+          return;
+        }
+      } else if (d.id === 'mender') {
+        if (pHealth < 3) {
+          setPHealth(3);
+          createExplosion(p.x + p.width/2, p.y + p.height/2, '#4ade80', false);
+          p.abilityTimer = 500;
+        } else {
+          return;
+        }
+      } else if (d.id === 'kalleb') {
+        const otherPlayer = ownerId === 1 ? player2 : player;
+        const potentialTargets = [...enemies];
+        if (otherPlayer && otherPlayer.x > p.x) {
+          potentialTargets.push({ ...otherPlayer, isPlayer: true });
+        }
+
+        const targets = potentialTargets
+          .filter(e => e.x > p.x)
+          .sort((a, b) => {
+            const distA = Math.sqrt(Math.pow(a.x - p.x, 2) + Math.pow(a.y - p.y, 2));
+            const distB = Math.sqrt(Math.pow(b.x - p.x, 2) + Math.pow(b.y - p.y, 2));
+            return distA - distB;
+          })
+          .slice(0, 3);
+
+        for (let i = 0; i < 3; i++) {
+          missiles.push({
+            x: p.x + p.width,
+            y: p.y + p.height / 2,
+            target: targets[i] || null,
+            speed: 6,
+            vx: 5,
+            vy: (i - 1) * 2,
+            width: 20,
+            height: 10,
+            color: '#fbbf24',
+            ownerId
+          });
+        }
+        p.abilityTimer = 500;
+      } else {
+        p.abilityTimer = d.id === 'racer' ? 2000 : 
+                         d.id === 'rookie' ? 3000 : 
+                         d.id === 'ghost' ? 5000 : 
+                         d.id === 'chrono' ? 3000 :
+                         d.id === 'stellar' ? 8000 :
+                         d.id === 'prime' ? 10000 : 5000;
+      }
+      p.abilityCooldown = 10000;
+      setReady(false);
+      setActive(true);
+    };
+
     const update = (dt: number) => {
+      if (isPaused) return;
+
       if (countdown > 0) {
         countdownTimer -= dt;
         if (countdownTimer <= 0) {
@@ -135,110 +240,107 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
       if (finished) {
         if (isRaceMode) return;
         player.x += 5;
-        if (player.x > canvas.width + 100) {
-          onGameOver(sessionCoins, Math.floor(distance), currentHealth, true);
+        if (player2) player2.x += 5;
+        if (player.x > canvas.width + 100 && (!player2 || player2.x > canvas.width + 100)) {
+          onGameOver(sessionCoins, Math.floor(distance), currentHealth, true, "Jogador 1");
         }
         return;
       }
 
       const moveSpeed = car.handling * 1.2;
-      if (keys['ArrowUp'] || keys['w']) player.y -= moveSpeed;
-      if (keys['ArrowDown'] || keys['s']) player.y += moveSpeed;
+      if (keys['w']) player.y -= moveSpeed;
+      if (keys['s']) player.y += moveSpeed;
 
       if (player.y < 20) player.y = 20;
       if (player.y > canvas.height - player.height - 20) player.y = canvas.height - player.height - 20;
 
-      if (keys[' '] && player.abilityCooldown <= 0) {
-        if (driver.id === 'maruto') {
-          shurikens.push({
-            x: player.x + player.width,
-            y: player.y + player.height / 2,
-            radius: 15,
-            speed: 15,
-            rotation: 0
-          });
-          player.abilityTimer = 500;
-        } else if (driver.id === 'overlord') {
-          enemies.forEach(e => createExplosion(e.x + e.width/2, e.y + e.height/2, e.color, true));
-          enemies.length = 0;
-          player.abilityTimer = 1000;
-        } else if (driver.id === 'nees' || driver.id === 'mender') {
-          const healAmount = driver.id === 'mender' ? 3 : 1;
-          if (currentHealth < 3) {
-            currentHealth = Math.min(3, currentHealth + healAmount);
-            setHealth(currentHealth);
-            createExplosion(player.x + player.width/2, player.y + player.height/2, '#4ade80', false);
-            player.abilityTimer = 500;
-          } else {
-            return;
-          }
-        } else if (driver.id === 'kalleb') {
-          const targets = [...enemies]
-            .filter(e => e.x > player.x)
-            .sort((a, b) => {
-              const distA = Math.sqrt(Math.pow(a.x - player.x, 2) + Math.pow(a.y - player.y, 2));
-              const distB = Math.sqrt(Math.pow(b.x - player.x, 2) + Math.pow(b.y - player.y, 2));
-              return distA - distB;
-            })
-            .slice(0, 3);
+      if (player2 && car2) {
+        const moveSpeed2 = car2.handling * 1.2;
+        if (keys['ArrowUp']) player2.y -= moveSpeed2;
+        if (keys['ArrowDown']) player2.y += moveSpeed2;
 
-          targets.forEach((target, i) => {
-            missiles.push({
-              x: player.x + player.width,
-              y: player.y + player.height / 2,
-              target: target,
-              speed: 6,
-              vx: 5,
-              vy: (i - 1) * 2,
-              width: 20,
-              height: 10,
-              color: '#f87171'
-            });
-          });
-          player.abilityTimer = 500;
-        } else {
-          player.abilityTimer = driver.id === 'racer' ? 2000 : 
-                               driver.id === 'rookie' ? 3000 : 
-                               driver.id === 'ghost' ? 5000 : 
-                               driver.id === 'chrono' ? 3000 :
-                               driver.id === 'stellar' ? 8000 :
-                               driver.id === 'prime' ? 10000 : 5000;
-        }
-        player.abilityCooldown = 10000;
-        setAbilityReady(false);
-        setAbilityActive(true);
+        if (player2.y < 20) player2.y = 20;
+        if (player2.y > canvas.height - player2.height - 20) player2.y = canvas.height - player2.height - 20;
       }
 
-      let currentSpeedX = player.baseSpeedX;
-      player.isInvincible = false;
-      player.isMagnet = false;
-      player.isBulldozer = false;
-      player.isTimeHacked = false;
-      player.isTimeStopped = false;
-      player.isEMPActive = false;
+      if (keys[' '] && player.abilityCooldown <= 0) {
+        activateAbility(driver, player, setAbilityReady, setAbilityActive, currentHealth, setHealth, 1);
+      }
 
-      if (player.abilityTimer > 0) {
-        player.abilityTimer -= dt;
-        if (driver.id === 'racer') {
-          currentSpeedX *= 2.5;
-          player.isInvincible = true;
-        } else if (driver.id === 'rookie' || driver.id === 'ghost' || driver.id === 'stellar' || driver.id === 'prime') {
-          player.isInvincible = true;
-          if (driver.id === 'stellar') currentSpeedX *= 3;
-          if (driver.id === 'prime') {
-            currentSpeedX *= 2.5;
-            player.isMagnet = true;
+      if (player2 && driver2 && keys['Enter'] && player2.abilityCooldown <= 0) {
+        activateAbility(driver2, player2, setAbilityReady2, setAbilityActive2, currentHealth2, setHealth2, 2);
+      }
+
+      const updatePlayerAbility = (p: any, d: Driver, setActive: any) => {
+        p.isInvincible = false;
+        p.isMagnet = false;
+        p.isBulldozer = false;
+        p.isTimeHacked = false;
+        p.isTimeStopped = false;
+        p.isEMPActive = false;
+        let speedMult = 1;
+
+        if (p.abilityTimer > 0) {
+          p.abilityTimer -= dt;
+          if (d.id === 'racer') {
+            speedMult = 2.5;
+            p.isInvincible = true;
+          } else if (d.id === 'rookie' || d.id === 'ghost' || d.id === 'stellar' || d.id === 'prime') {
+            p.isInvincible = true;
+            if (d.id === 'stellar') speedMult = 3;
+            if (d.id === 'prime') {
+              speedMult = 2.5;
+              p.isMagnet = true;
+            }
+          } else if (d.id === 'bruiser') {
+            p.isBulldozer = true;
+          } else if (d.id === 'collector') {
+            p.isMagnet = true;
+          } else if (d.id === 'tech') {
+            p.isTimeHacked = true;
+          } else if (d.id === 'chrono') {
+            p.isTimeStopped = true;
           }
-        } else if (driver.id === 'bruiser') {
-          player.isBulldozer = true;
-        } else if (driver.id === 'collector') {
-          player.isMagnet = true;
-        } else if (driver.id === 'tech') {
-          player.isTimeHacked = true;
-        } else if (driver.id === 'chrono') {
-          player.isTimeStopped = true;
+          if (p.abilityTimer <= 0) setActive(false);
         }
-        if (player.abilityTimer <= 0) setAbilityActive(false);
+        return speedMult;
+      };
+
+      const speedMult1 = updatePlayerAbility(player, driver, setAbilityActive);
+      const speedMult2 = player2 && driver2 ? updatePlayerAbility(player2, driver2, setAbilityActive2) : 1;
+
+      const p1Speed = (player.baseSpeedX * speedMult1 * 2) * (player2?.isTimeHacked ? 0.5 : 1) * (player2?.isTimeStopped ? 0 : 1);
+      const p2Speed = player2 ? (player2.baseSpeedX * speedMult2 * 2) * (player.isTimeHacked ? 0.5 : 1) * (player.isTimeStopped ? 0 : 1) : 0;
+
+      const roadSpeed = Math.max(p1Speed, p2Speed);
+      roadOffset = (roadOffset - roadSpeed) % 40;
+      
+      distance += p1Speed / 100;
+      if (player2) distance2 += p2Speed / 100;
+
+      if (mode === 'multiplayer' && player2) {
+        const leaderDist = Math.max(distance, distance2);
+        player.x = 100 + (distance - leaderDist) * 15;
+        player2.x = 100 + (distance2 - leaderDist) * 15;
+        
+        // Victory Check
+        if (distance >= targetDistance && !finished) {
+          finished = true;
+          onGameOver(sessionCoins, Math.floor(distance), 0, true, "Jogador 1");
+        } else if (distance2 >= targetDistance && !finished) {
+          finished = true;
+          onGameOver(sessionCoins, Math.floor(distance2), 0, true, "Jogador 2");
+        }
+        
+        setScore(Math.floor(Math.max(distance, distance2)));
+      } else {
+        setScore(Math.floor(distance));
+        if (mode === 'levels' && distance >= targetDistance) {
+          if (!finished) {
+            finished = true;
+            onGameOver(sessionCoins, Math.floor(distance), currentHealth, true, "Jogador 1");
+          }
+        }
       }
 
       if (player.abilityCooldown > 0) {
@@ -246,16 +348,9 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
         if (player.abilityCooldown <= 0) setAbilityReady(true);
       }
 
-      const roadSpeed = (currentSpeedX * 2) * (player.isTimeHacked ? 0.5 : 1);
-      roadOffset = (roadOffset - roadSpeed) % 40;
-      distance += roadSpeed / 100;
-      setScore(Math.floor(distance));
-
-      if (mode === 'levels' && distance >= targetDistance) {
-        if (!finished) {
-          finished = true;
-          onGameOver(sessionCoins, Math.floor(distance), currentHealth, true);
-        }
+      if (player2 && player2.abilityCooldown > 0) {
+        player2.abilityCooldown -= dt;
+        if (player2.abilityCooldown <= 0) setAbilityReady2(true);
       }
 
       enemySpawnTimer -= dt;
@@ -336,38 +431,55 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
 
       for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i];
-        const enemySpeed = player.isTimeStopped ? 0 : e.speed;
-        e.x -= (roadSpeed + enemySpeed) * (player.isTimeHacked ? 0.5 : 1);
+        const enemySpeed = player.isTimeStopped || player2?.isTimeStopped ? 0 : e.speed;
+        e.x -= (roadSpeed + enemySpeed) * (player.isTimeHacked || player2?.isTimeHacked ? 0.5 : 1);
         
-        if (
-          player.x < e.x + e.width &&
-          player.x + player.width > e.x &&
-          player.y < e.y + e.height &&
-          player.y + player.height > e.y
-        ) {
-          if (player.isBulldozer) {
-            createExplosion(e.x + e.width/2, e.y + e.height/2, e.color, true);
-            enemies.splice(i, 1);
-            continue;
-          } else if (!player.isInvincible) {
-            if (car.id === 'kaiser') {
-              player.baseSpeedX += 0.5;
+        const checkCollision = (p: any, isP1: boolean) => {
+          if (
+            p.x < e.x + e.width &&
+            p.x + p.width > e.x &&
+            p.y < e.y + e.height &&
+            p.y + p.height > e.y
+          ) {
+            if (p.isBulldozer) {
+              createExplosion(e.x + e.width/2, e.y + e.height/2, e.color, true);
+              enemies.splice(i, 1);
+              return true;
+            } else if (!p.isInvincible) {
+              if (isP1 && car.id === 'kaiser') {
+                p.baseSpeedX += 0.5;
+              }
+              
+              if (isP1) {
+                currentHealth -= 1;
+                setHealth(currentHealth);
+              } else {
+                currentHealth2 -= 1;
+                setHealth2(currentHealth2);
+              }
+
+              createExplosion(p.x + p.width/2, p.y + p.height/2, '#ff0000', true);
+              enemies.splice(i, 1);
+              
+              p.isInvincible = true;
+              p.abilityTimer = 1000;
+              
+              const pHealth = isP1 ? currentHealth : currentHealth2;
+              if (pHealth <= 0) {
+                if (!player2) {
+                  onGameOver(sessionCoins, Math.floor(distance), 0, false);
+                } else if (currentHealth <= 0 && currentHealth2 <= 0) {
+                  onGameOver(sessionCoins, Math.floor(distance), 0, false);
+                }
+              }
+              return true;
             }
-            currentHealth -= 1;
-            setHealth(currentHealth);
-            createExplosion(player.x + player.width/2, player.y + player.height/2, '#ff0000', true);
-            enemies.splice(i, 1);
-            
-            player.isInvincible = true;
-            player.abilityTimer = 1000;
-            
-            if (currentHealth <= 0) {
-              onGameOver(sessionCoins, Math.floor(distance), 0, false);
-              return;
-            }
-            continue;
           }
-        }
+          return false;
+        };
+
+        if (checkCollision(player, true)) continue;
+        if (player2 && checkCollision(player2, false)) continue;
 
         if (e.x < -e.width) enemies.splice(i, 1);
       }
@@ -375,9 +487,10 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
       for (let i = coins.length - 1; i >= 0; i--) {
         const c = coins[i];
         
-        if (player.isMagnet) {
-          const dx = (player.x + player.width/2) - c.x;
-          const dy = (player.y + player.height/2) - c.y;
+        const magnetPlayer = (player.isMagnet ? player : (player2?.isMagnet ? player2 : null));
+        if (magnetPlayer) {
+          const dx = (magnetPlayer.x + magnetPlayer.width/2) - c.x;
+          const dy = (magnetPlayer.y + magnetPlayer.height/2) - c.y;
           const dist = Math.sqrt(dx*dx + dy*dy);
           if (dist < 200) {
             c.x += (dx / dist) * 10;
@@ -389,20 +502,81 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
           c.x -= roadSpeed;
         }
 
-        const px = player.x + player.width/2;
-        const py = player.y + player.height/2;
-        const dx = px - c.x;
-        const dy = py - c.y;
-        if (Math.sqrt(dx*dx + dy*dy) < c.radius + player.height/2) {
-          sessionCoins++;
-          setCoinsCollected(sessionCoins);
-          coins.splice(i, 1);
-          // Small shake on coin collect
-          shake = Math.max(shake, 2);
-          continue;
-        }
+        const checkCoinCollect = (p: any) => {
+          const px = p.x + p.width/2;
+          const py = p.y + p.height/2;
+          const dx = px - c.x;
+          const dy = py - c.y;
+          if (Math.sqrt(dx*dx + dy*dy) < c.radius + p.height/2) {
+            sessionCoins++;
+            setCoinsCollected(sessionCoins);
+            coins.splice(i, 1);
+            shake = Math.max(shake, 2);
+            return true;
+          }
+          return false;
+        };
+
+        if (checkCoinCollect(player)) continue;
+        if (player2 && checkCoinCollect(player2)) continue;
 
         if (c.x < -20) coins.splice(i, 1);
+      }
+
+      // Player-Player Collision
+      if (player2 && !finished) {
+        if (
+          player.x < player2.x + player2.width &&
+          player.x + player.width > player2.x &&
+          player.y < player2.y + player2.height &&
+          player.y + player.height > player2.y
+        ) {
+          // Repulsion
+          const dy = player.y - player2.y;
+          if (dy > 0) {
+            player.y += 40;
+            player2.y -= 40;
+          } else {
+            player.y -= 40;
+            player2.y += 40;
+          }
+
+          if (player.isBulldozer && !player2.isInvincible) {
+            currentHealth2 -= 1;
+            setHealth2(currentHealth2);
+            createExplosion(player2.x + player2.width/2, player2.y + player2.height/2, '#ff0000', true);
+            player2.isInvincible = true;
+            player2.abilityTimer = 1000;
+          } else if (player2.isBulldozer && !player.isInvincible) {
+            currentHealth -= 1;
+            setHealth(currentHealth);
+            createExplosion(player.x + player.width/2, player.y + player.height/2, '#ff0000', true);
+            player.isInvincible = true;
+            player.abilityTimer = 1000;
+          } else if (!player.isInvincible && !player2.isInvincible) {
+            currentHealth -= 1;
+            currentHealth2 -= 1;
+            setHealth(currentHealth);
+            setHealth2(currentHealth2);
+            createExplosion(player.x + player.width/2, player.y + player.height/2, '#ff0000', true);
+            createExplosion(player2.x + player2.width/2, player2.y + player2.height/2, '#ff0000', true);
+            player.isInvincible = true;
+            player.abilityTimer = 1000;
+            player2.isInvincible = true;
+            player2.abilityTimer = 1000;
+          }
+
+          if (currentHealth <= 0 || currentHealth2 <= 0) {
+            let winnerName = "";
+            if (currentHealth <= 0 && currentHealth2 <= 0) {
+              winnerName = "EMPATE";
+            } else {
+              winnerName = currentHealth > currentHealth2 ? "Jogador 1" : "Jogador 2";
+            }
+            onGameOver(sessionCoins, Math.floor(distance), 0, true, winnerName);
+            finished = true;
+          }
+        }
       }
 
       for (let i = particles.length - 1; i >= 0; i--) {
@@ -432,6 +606,50 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
             break;
           }
         }
+
+        // Shuriken collision with other player
+        if (s && player2) {
+          if (s.ownerId === 1 && !player2.isInvincible) {
+            if (
+              s.x + s.radius > player2.x &&
+              s.x - s.radius < player2.x + player2.width &&
+              s.y + s.radius > player2.y &&
+              s.y - s.radius < player2.y + player2.height
+            ) {
+              currentHealth2 -= 1;
+              setHealth2(currentHealth2);
+              createExplosion(player2.x + player2.width/2, player2.y + player2.height/2, '#ff0000', true);
+              player2.isInvincible = true;
+              player2.abilityTimer = 1000;
+              shurikens.splice(i, 1);
+              if (currentHealth2 <= 0) {
+                onGameOver(sessionCoins, Math.floor(distance), 0, true, "Jogador 1");
+                finished = true;
+              }
+              continue;
+            }
+          } else if (s.ownerId === 2 && !player.isInvincible) {
+            if (
+              s.x + s.radius > player.x &&
+              s.x - s.radius < player.x + player.width &&
+              s.y + s.radius > player.y &&
+              s.y - s.radius < player.y + player.height
+            ) {
+              currentHealth -= 1;
+              setHealth(currentHealth);
+              createExplosion(player.x + player.width/2, player.y + player.height/2, '#ff0000', true);
+              player.isInvincible = true;
+              player.abilityTimer = 1000;
+              shurikens.splice(i, 1);
+              if (currentHealth <= 0) {
+                onGameOver(sessionCoins, Math.floor(distance), 0, true, "Jogador 2");
+                finished = true;
+              }
+              continue;
+            }
+          }
+        }
+
         if (s && s.x > canvas.width + 50) shurikens.splice(i, 1);
       }
 
@@ -439,18 +657,28 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
         const m = missiles[i];
         
         // Homing logic
-        if (m.target && enemies.includes(m.target)) {
-          const dx = m.target.x + m.target.width/2 - m.x;
-          const dy = m.target.y + m.target.height/2 - m.y;
+        if (m.target && (enemies.includes(m.target) || (m.target.isPlayer && (m.target.ownerId === 1 ? player : player2)))) {
+          const targetX = m.target.isPlayer ? (m.target.ownerId === 1 ? player.x : player2!.x) : m.target.x;
+          const targetY = m.target.isPlayer ? (m.target.ownerId === 1 ? player.y : player2!.y) : m.target.y;
+          const targetWidth = m.target.isPlayer ? (m.target.ownerId === 1 ? player.width : player2!.width) : m.target.width;
+          const targetHeight = m.target.isPlayer ? (m.target.ownerId === 1 ? player.height : player2!.height) : m.target.height;
+
+          const dx = targetX + targetWidth/2 - m.x;
+          const dy = targetY + targetHeight/2 - m.y;
           const dist = Math.sqrt(dx*dx + dy*dy);
           if (dist > 5) {
-            m.vx += (dx / dist) * 0.5;
-            m.vy += (dy / dist) * 0.5;
+            m.vx += (dx / dist) * 0.8; // Increased homing strength
+            m.vy += (dy / dist) * 0.8;
           }
         } else {
           // If target is gone, find new one or just go straight
           const nextTarget = enemies.find(e => e.x > m.x);
-          if (nextTarget) m.target = nextTarget;
+          if (nextTarget) {
+            m.target = nextTarget;
+          } else if (player2) {
+            const otherP = m.ownerId === 1 ? player2 : player;
+            m.target = { ...otherP, isPlayer: true, ownerId: m.ownerId === 1 ? 2 : 1 };
+          }
           m.vx += 0.2;
         }
 
@@ -463,6 +691,49 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
 
         m.x += m.vx;
         m.y += m.vy;
+
+        // Collision with other player
+        if (player2) {
+          if (m.ownerId === 1 && !player2.isInvincible) {
+            if (
+              m.x < player2.x + player2.width &&
+              m.x + m.width > player2.x &&
+              m.y < player2.y + player2.height &&
+              m.y + m.height > player2.y
+            ) {
+              currentHealth2 -= 1;
+              setHealth2(currentHealth2);
+              createExplosion(player2.x + player2.width/2, player2.y + player2.height/2, '#ff0000', true);
+              player2.isInvincible = true;
+              player2.abilityTimer = 1000;
+              missiles.splice(i, 1);
+              if (currentHealth2 <= 0) {
+                onGameOver(sessionCoins, Math.floor(distance), 0, true, "Jogador 1");
+                finished = true;
+              }
+              continue;
+            }
+          } else if (m.ownerId === 2 && !player.isInvincible) {
+            if (
+              m.x < player.x + player.width &&
+              m.x + m.width > player.x &&
+              m.y < player.y + player.height &&
+              m.y + m.height > player.y
+            ) {
+              currentHealth -= 1;
+              setHealth(currentHealth);
+              createExplosion(player.x + player.width/2, player.y + player.height/2, '#ff0000', true);
+              player.isInvincible = true;
+              player.abilityTimer = 1000;
+              missiles.splice(i, 1);
+              if (currentHealth <= 0) {
+                onGameOver(sessionCoins, Math.floor(distance), 0, true, "Jogador 2");
+                finished = true;
+              }
+              continue;
+            }
+          }
+        }
 
         // Collision with enemies
         for (let j = enemies.length - 1; j >= 0; j--) {
@@ -481,7 +752,7 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
           }
         }
 
-        if (m && (m.x > canvas.width + 100 || m.x < -100 || m.y < -100 || m.y > canvas.height + 100)) {
+        if (m && (m.x > canvas.width + 100 || m.x < -1000 || m.y < -100 || m.y > canvas.height + 100)) {
           missiles.splice(i, 1);
         }
       }
@@ -513,8 +784,8 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
       // Road Lines
       ctx.strokeStyle = world === 1 ? '#334155' : '#92400e';
       ctx.lineWidth = 4;
-      ctx.setLineDash([20, 20]);
-      ctx.lineDashOffset = -roadOffset;
+      ctx.setLineDash([40, 40]);
+      ctx.lineDashOffset = -roadOffset * 4; // Even faster effect
       
       ctx.beginPath();
       ctx.moveTo(0, canvas.height / 3);
@@ -536,9 +807,10 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
       ctx.fillRect(0, canvas.height - 22, canvas.width, 4);
       ctx.shadowBlur = 0;
 
-      const showFinishLine = mode === 'levels' && (world === 2 || (world === 1 && level === 10));
+      const showFinishLine = (mode === 'levels' && (world === 2 || (world === 1 && level === 10))) || mode === 'multiplayer';
       if (showFinishLine) {
-        const finishX = 100 + (targetDistance - distance) * 15;
+        const leaderDist = mode === 'multiplayer' ? Math.max(distance, distance2) : distance;
+        const finishX = 100 + (targetDistance - leaderDist) * 15;
         if (finishX < canvas.width + 500 && finishX > -500) {
           ctx.fillStyle = '#fff';
           for (let i = 0; i < 10; i++) {
@@ -587,39 +859,47 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
         ctx.restore();
       });
 
-      ctx.save();
-      if (player.isInvincible && Math.floor(performance.now() / 100) % 2 === 0) {
-        ctx.globalAlpha = 0.5;
-      }
-      
-      if (player.abilityTimer > 0) {
-        ctx.shadowBlur = 20;
-        if (driver.id === 'racer') ctx.shadowColor = '#3b82f6';
-        if (driver.id === 'rookie') ctx.shadowColor = '#eab308';
-        if (driver.id === 'bruiser') ctx.shadowColor = '#ef4444';
-        if (driver.id === 'collector') ctx.shadowColor = '#a855f7';
-        if (driver.id === 'maruto') ctx.shadowColor = '#94a3b8';
-        if (driver.id === 'ghost') ctx.shadowColor = '#ffffff';
-        if (driver.id === 'tech') ctx.shadowColor = '#2dd4bf';
-        if (driver.id === 'overlord') ctx.shadowColor = '#f97316';
-      }
+      const drawPlayer = (p: any, c: Car, d: Driver, active: boolean) => {
+        ctx.save();
+        if (p.isInvincible && Math.floor(performance.now() / 100) % 2 === 0) {
+          ctx.globalAlpha = 0.5;
+        }
+        
+        if (p.abilityTimer > 0) {
+          ctx.shadowBlur = 20;
+          if (d.id === 'racer') ctx.shadowColor = '#3b82f6';
+          if (d.id === 'rookie') ctx.shadowColor = '#eab308';
+          if (d.id === 'bruiser') ctx.shadowColor = '#ef4444';
+          if (d.id === 'collector') ctx.shadowColor = '#a855f7';
+          if (d.id === 'maruto') ctx.shadowColor = '#94a3b8';
+          if (d.id === 'ghost') ctx.shadowColor = '#ffffff';
+          if (d.id === 'tech') ctx.shadowColor = '#2dd4bf';
+          if (d.id === 'overlord') ctx.shadowColor = '#f97316';
+          if (d.id === 'kalleb') ctx.shadowColor = '#eab308';
+        }
 
-      const isPrimeGodMode = driver.id === 'prime' && abilityActive;
-      const carColor = isPrimeGodMode ? '#ffffff' : car.color;
-      const headlightColor = isPrimeGodMode ? '#38bdf8' : '#fef08a';
+        const isPrimeGodMode = d.id === 'prime' && active;
+        const carColor = isPrimeGodMode ? '#ffffff' : c.color;
+        const headlightColor = isPrimeGodMode ? '#38bdf8' : '#fef08a';
 
-      ctx.fillStyle = carColor;
-      if (driver.id === 'ghost' && player.abilityTimer > 0) ctx.globalAlpha = 0.3;
-      ctx.fillRect(player.x, player.y, player.width, player.height);
-      ctx.globalAlpha = 1;
-      
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = car.id === 'phantom' ? '#334155' : '#94a3b8';
-      ctx.fillRect(player.x + 40, player.y + 5, 15, player.height - 10);
-      ctx.fillStyle = headlightColor;
-      ctx.fillRect(player.x + player.width - 6, player.y + 2, 4, 8);
-      ctx.fillRect(player.x + player.width - 6, player.y + player.height - 10, 4, 8);
-      ctx.restore();
+        ctx.fillStyle = carColor;
+        if (d.id === 'ghost' && p.abilityTimer > 0) ctx.globalAlpha = 0.3;
+        ctx.fillRect(p.x, p.y, p.width, p.height);
+        ctx.globalAlpha = 1;
+        
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = c.id === 'phantom' ? '#334155' : '#94a3b8';
+        ctx.fillRect(p.x + 40, p.y + 5, 15, p.height - 10);
+        ctx.fillStyle = headlightColor;
+        ctx.fillRect(p.x + p.width - 6, p.y + 2, 4, 8);
+        ctx.fillRect(p.x + p.width - 6, p.y + p.height - 10, 4, 8);
+        ctx.restore();
+      };
+
+      drawPlayer(player, car, driver, abilityActive);
+      if (player2 && car2 && driver2) {
+        drawPlayer(player2, car2, driver2, abilityActive2);
+      }
 
       particles.forEach(p => {
         ctx.globalAlpha = p.life;
@@ -683,41 +963,148 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
       animationId = requestAnimationFrame(loop);
     };
 
-    const handleKeyDown = (e: KeyboardEvent) => { keys[e.key] = true; };
+    const handleKeyDown = (e: KeyboardEvent) => { 
+      keys[e.key] = true; 
+      if (e.key === 'Escape' && mode !== 'multiplayer') {
+        setIsPaused(prev => !prev);
+      }
+    };
     const handleKeyUp = (e: KeyboardEvent) => { keys[e.key] = false; };
+
+    const handleMouseDown = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+      if (
+        mouseX >= player.x &&
+        mouseX <= player.x + player.width &&
+        mouseY >= player.y &&
+        mouseY <= player.y + player.height
+      ) {
+        isDragging = true;
+        dragOffsetY = mouseY - player.y;
+      }
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging) {
+        const rect = canvas.getBoundingClientRect();
+        const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+        player.y = mouseY - dragOffsetY;
+      }
+    };
+
+    const handleMouseUp = () => {
+      isDragging = false;
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = (touch.clientX - rect.left) * (canvas.width / rect.width);
+        const mouseY = (touch.clientY - rect.top) * (canvas.height / rect.height);
+
+        if (
+          mouseX >= player.x &&
+          mouseX <= player.x + player.width &&
+          mouseY >= player.y &&
+          mouseY <= player.y + player.height
+        ) {
+          isDragging = true;
+          dragOffsetY = mouseY - player.y;
+          e.preventDefault();
+        }
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (isDragging && e.touches.length > 0) {
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        const mouseY = (touch.clientY - rect.top) * (canvas.height / rect.height);
+        player.y = mouseY - dragOffsetY;
+        e.preventDefault();
+      }
+    };
+
+    const handleTouchEnd = () => {
+      isDragging = false;
+    };
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    canvas.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
 
     animationId = requestAnimationFrame(loop);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      canvas.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      canvas.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
       cancelAnimationFrame(animationId);
     };
-  }, [car, driver, onGameOver, mode, level, targetDistance]);
+  }, [car, driver, car2, driver2, onGameOver, mode, level, targetDistance]);
 
   return (
     <div className="relative flex flex-col items-center justify-center w-full h-full bg-slate-900 text-white font-sans p-4">
       <div className="w-full max-w-4xl relative">
-        <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
-          <div className="text-2xl font-bold text-yellow-400 drop-shadow-md">Moedas: {coinsCollected}</div>
-          <div className="text-xl font-bold text-white drop-shadow-md">
-            {mode === 'levels' ? `Nível ${level} - ${score}/${targetDistance}m` : `Distância: ${score}m`}
+        <div className="absolute top-4 left-4 flex flex-col gap-4 z-10">
+          <div className="flex flex-col gap-1">
+            <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Jogador 1</div>
+            <div className="flex gap-1">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className={`w-4 h-4 rounded-full ${i < health ? 'bg-red-500' : 'bg-slate-700'} border border-white/20`} />
+              ))}
+            </div>
           </div>
-          <div className="flex gap-1 mt-2">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className={`w-6 h-6 rounded-full ${i < health ? 'bg-red-500' : 'bg-slate-700'} border-2 border-white`} />
-            ))}
+
+          {car2 && (
+            <div className="flex flex-col gap-1">
+              <div className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Jogador 2</div>
+              <div className="flex gap-1">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className={`w-4 h-4 rounded-full ${i < health2 ? 'bg-red-500' : 'bg-slate-700'} border border-white/20`} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="mt-2">
+            <div className="text-xl font-black italic text-yellow-400 drop-shadow-md tracking-tighter">COINS: {coinsCollected}</div>
+            <div className="text-sm font-bold text-white/70 drop-shadow-md">
+              {mode === 'levels' || mode === 'multiplayer' ? `${mode === 'levels' ? `NÍVEL ${level}` : 'CORRIDA'} - ${score}/${targetDistance}m` : `${score}m`}
+            </div>
           </div>
         </div>
 
-        <div className="absolute top-4 right-4 z-10 flex flex-col items-end">
-          <div className="text-sm font-bold uppercase tracking-wider text-slate-300 mb-1">Habilidade: {driver.abilityName}</div>
-          <div className={`px-4 py-2 rounded-lg font-bold ${abilityActive ? 'bg-yellow-500 text-black animate-pulse' : abilityReady ? 'bg-blue-500 text-white' : 'bg-slate-600 text-slate-400'}`}>
-            {abilityActive ? 'ATIVO!' : abilityReady ? 'PRONTO (ESPAÇO)' : 'RECARREGANDO...'}
+        <div className="absolute top-4 right-4 z-10 flex flex-col items-end gap-4">
+          <div className="flex flex-col items-end">
+            <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">P1: {driver.abilityName}</div>
+            <div className={`px-3 py-1 rounded-lg text-[10px] font-black tracking-tighter ${abilityActive ? 'bg-yellow-500 text-black animate-pulse' : abilityReady ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-500'}`}>
+              {abilityActive ? 'ATIVO!' : abilityReady ? 'ESPAÇO' : 'RECARREGANDO'}
+            </div>
           </div>
+
+          {driver2 && (
+            <div className="flex flex-col items-end">
+              <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">P2: {driver2.abilityName}</div>
+              <div className={`px-3 py-1 rounded-lg text-[10px] font-black tracking-tighter ${abilityActive2 ? 'bg-yellow-500 text-black animate-pulse' : abilityReady2 ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-500'}`}>
+                {abilityActive2 ? 'ATIVO!' : abilityReady2 ? 'ENTER' : 'RECARREGANDO'}
+              </div>
+            </div>
+          )}
         </div>
 
         <canvas
@@ -727,7 +1114,7 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
           className="w-full aspect-[2/1] rounded-xl shadow-2xl border-4 border-slate-700 bg-slate-800"
         />
         
-        {mode === 'levels' && (
+        {(mode === 'levels' || mode === 'multiplayer') && (
           <div className="absolute bottom-4 left-4 right-4 h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
             <div 
               className="h-full bg-purple-500 transition-all duration-300" 
@@ -735,6 +1122,7 @@ export default function Game({ car, driver, mode, world = 1, level, onGameOver }
             />
           </div>
         )}
+
       </div>
     </div>
   );

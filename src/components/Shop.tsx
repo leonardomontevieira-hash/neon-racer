@@ -67,7 +67,7 @@ export default function Shop({ onNavigate, coins, ownedCars, ownedDrivers, onBuy
             .sort((a, b) => (CARS[a]?.cost || 0) - (CARS[b]?.cost || 0))
             .map((id) => {
             const car = CARS[id];
-            const isOwned = ownedCars.includes(id);
+            const isOwned = (ownedCars || []).includes(id);
             const canAfford = coins >= car.cost;
 
             return (
@@ -131,7 +131,7 @@ export default function Shop({ onNavigate, coins, ownedCars, ownedDrivers, onBuy
             .sort((a, b) => (DRIVERS[a]?.cost || 0) - (DRIVERS[b]?.cost || 0))
             .map((id) => {
             const driver = DRIVERS[id];
-            const isOwned = ownedDrivers.includes(id);
+            const isOwned = (ownedDrivers || []).includes(id);
             const canAfford = coins >= driver.cost;
 
             return (
