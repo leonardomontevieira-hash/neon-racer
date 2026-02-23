@@ -28,6 +28,16 @@ export default function App() {
         }
         if (parsed.ownedCars && parsed.ownedDrivers && parsed.levels) {
           const sanitized = { ...INITIAL_STATE, ...parsed };
+          
+          // Migration: Ensure all worlds from INITIAL_STATE exist in levels
+          sanitized.levels = { ...INITIAL_STATE.levels };
+          Object.keys(parsed.levels).forEach(worldId => {
+            const wId = parseInt(worldId);
+            if (sanitized.levels[wId]) {
+              sanitized.levels[wId] = { ...sanitized.levels[wId], ...parsed.levels[wId] };
+            }
+          });
+
           // Filter out non-existent cars and drivers
           sanitized.ownedCars = sanitized.ownedCars.filter(id => !!CARS[id]);
           sanitized.ownedDrivers = sanitized.ownedDrivers.filter(id => !!DRIVERS[id]);
@@ -84,6 +94,9 @@ export default function App() {
         } else if (selectedWorld === 1) {
           // Finished World 1, unlock World 2 Level 1
           newState.levels[2][1] = { ...prev.levels[2][1], unlocked: true };
+        } else if (selectedWorld === 2) {
+          // Finished World 2, unlock World 3 Level 1
+          newState.levels[3][1] = { ...prev.levels[3][1], unlocked: true };
         }
       }
 
@@ -107,7 +120,9 @@ export default function App() {
 
   const handleSelectWorld = (world: number) => {
     setSelectedWorld(world);
-    setScreen('level_select');
+    if (screen !== 'multiplayer_setup') {
+      setScreen('level_select');
+    }
   };
 
   const handleSelectLevel = (level: number) => {
@@ -370,10 +385,12 @@ export default function App() {
           selectedDriver1={gameState.selectedDriver}
           selectedCar2={gameState.selectedCar2 || 'basic'}
           selectedDriver2={gameState.selectedDriver2 || 'rookie'}
+          selectedWorld={selectedWorld}
           onSelectCar1={handleSelectCar}
           onSelectDriver1={handleSelectDriver}
           onSelectCar2={handleSelectCar2}
           onSelectDriver2={handleSelectDriver2}
+          onSelectWorld={handleSelectWorld}
           onStart={() => setScreen('game')}
         />
       )}

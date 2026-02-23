@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, CheckCircle2, Car as CarIcon, User, Play } from 'lucide-react';
 import { CarId, DriverId, Screen } from '../types';
-import { CARS, DRIVERS } from '../constants';
+import { WORLDS, CARS, DRIVERS } from '../constants';
 
 interface MultiplayerSetupProps {
   onNavigate: (screen: Screen) => void;
@@ -11,10 +11,12 @@ interface MultiplayerSetupProps {
   selectedDriver1: DriverId;
   selectedCar2: CarId;
   selectedDriver2: DriverId;
+  selectedWorld: number;
   onSelectCar1: (id: CarId) => void;
   onSelectDriver1: (id: DriverId) => void;
   onSelectCar2: (id: CarId) => void;
   onSelectDriver2: (id: DriverId) => void;
+  onSelectWorld: (world: number) => void;
   onStart: () => void;
 }
 
@@ -26,14 +28,16 @@ export default function MultiplayerSetup({
   selectedDriver1,
   selectedCar2,
   selectedDriver2,
+  selectedWorld,
   onSelectCar1,
   onSelectDriver1,
   onSelectCar2,
   onSelectDriver2,
+  onSelectWorld,
   onStart
 }: MultiplayerSetupProps) {
   const [activePlayer, setActivePlayer] = useState<1 | 2>(1);
-  const [tab, setTab] = useState<'cars' | 'drivers'>('cars');
+  const [tab, setTab] = useState<'cars' | 'drivers' | 'maps'>('cars');
 
   const currentCar = activePlayer === 1 ? selectedCar1 : selectedCar2;
   const currentDriver = activePlayer === 1 ? selectedDriver1 : selectedDriver2;
@@ -109,9 +113,39 @@ export default function MultiplayerSetup({
                 <User className="w-5 h-5" />
                 MOTORISTAS
               </button>
+              <button
+                onClick={() => setTab('maps')}
+                className={`flex-1 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors ${tab === 'maps' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+              >
+                <Play className="w-5 h-5" />
+                MAPAS
+              </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {tab === 'maps' && Object.entries(WORLDS).map(([id, world]) => {
+                const worldId = parseInt(id);
+                const isSelected = selectedWorld === worldId;
+                return (
+                  <div
+                    key={id}
+                    onClick={() => onSelectWorld(worldId)}
+                    className={`bg-slate-800 rounded-2xl p-6 border-2 cursor-pointer transition-all hover:scale-102 ${
+                      isSelected ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-700'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center mb-2">
+                      <h2 className="text-xl font-black italic tracking-tighter" style={{ color: world.color }}>
+                        MUNDO {id}
+                      </h2>
+                      {isSelected && <CheckCircle2 className="w-6 h-6 text-emerald-500" />}
+                    </div>
+                    <p className="text-white font-bold mb-1">{world.name}</p>
+                    <p className="text-slate-400 text-xs leading-relaxed">{world.description}</p>
+                  </div>
+                );
+              })}
+
               {tab === 'cars' && [...(ownedCars || [])]
                 .filter(id => !!CARS[id])
                 .sort((a, b) => CARS[a].cost - CARS[b].cost)

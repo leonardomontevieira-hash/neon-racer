@@ -13,7 +13,8 @@ interface GameProps {
   onGameOver: (coins: number, score: number, stars?: number, victory?: boolean, winner?: string) => void;
 }
 
-export default function Game({ car, driver, car2, driver2, mode, world = 1, level, onGameOver }: GameProps) {
+export default function Game({ car, driver, car2, driver2, mode, world: initialWorld = 1, level, onGameOver }: GameProps) {
+  const world = mode === 'infinite' ? 1 : initialWorld;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [abilityReady, setAbilityReady] = useState(true);
   const [abilityActive, setAbilityActive] = useState(false);
@@ -24,13 +25,24 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
   const [health, setHealth] = useState(3);
   const [health2, setHealth2] = useState(3);
   const [isPaused, setIsPaused] = useState(false);
+  const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
 
   const worldOffset = (world - 1) * 500;
   const targetDistance = mode === 'levels' && level ? worldOffset + BASE_LEVEL_DISTANCE + (level - 1) * LEVEL_DISTANCE_INCREMENT : (mode === 'multiplayer' ? 2000 : Infinity);
 
   useEffect(() => {
+    const handleResize = () => {
+      setDimensions({ width: window.innerWidth, height: window.innerHeight });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    canvas.width = dimensions.width;
+    canvas.height = dimensions.height;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -40,13 +52,18 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
     let isDragging = false;
     let dragOffsetY = 0;
 
+    const scale = Math.max(1, dimensions.height / 400);
+    const baseWidth = 70 * scale;
+    const baseHeight = 40 * scale;
+
     const isRaceMode = (mode === 'levels' && (world === 2 || (world === 1 && level === 10))) || mode === 'multiplayer';
     const player = {
-      x: 100,
-      y: isRaceMode ? 30 : canvas.height / 2 - 40,
-      width: 70,
-      height: 40,
+      x: 100 * scale,
+      y: isRaceMode ? 30 * scale : dimensions.height / 2 - (baseHeight / 2),
+      width: baseWidth,
+      height: baseHeight,
       baseSpeedX: car.speed * 1.5,
+      vy: 0, // Vertical velocity for slippery handling
       abilityTimer: 0,
       abilityCooldown: 0,
       isInvincible: false,
@@ -58,11 +75,12 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
     };
 
     const player2 = (car2 && driver2) ? {
-      x: 100,
-      y: isRaceMode ? 90 : canvas.height / 2 + 40,
-      width: 70,
-      height: 40,
+      x: 100 * scale,
+      y: isRaceMode ? 90 * scale : dimensions.height / 2 + (baseHeight / 2),
+      width: baseWidth,
+      height: baseHeight,
       baseSpeedX: car2.speed * 1.5,
+      vy: 0, // Vertical velocity for slippery handling
       abilityTimer: 0,
       abilityCooldown: 0,
       isInvincible: false,
@@ -78,6 +96,7 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
     const particles: any[] = [];
     const shurikens: any[] = [];
     const missiles: any[] = [];
+    const shieldCars: any[] = [];
     let roadOffset = 0;
     let distance = 0;
     let distance2 = 0;
@@ -93,16 +112,26 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
     const levelDifficulty = (world - 1) * 10 + level;
     const baseRivalSpeed = 2.5 + (levelDifficulty * 0.4); // Adjusted for better progression
 
+    const getObjX = (obj: any) => {
+      if (obj.isPlayer) return obj.ownerId === 1 ? player.x : player2!.x;
+      if (isRaceMode && obj.distance !== undefined) {
+        const leaderDist = player2 ? Math.max(distance, distance2) : distance;
+        return (100 * scale) + (obj.distance - leaderDist) * (15 * scale);
+      }
+      return obj.x;
+    };
+
     if (isRaceMode && mode !== 'multiplayer') {
       const rivalCount = world === 1 ? 1 : 5;
+      const laneHeight = (canvas.height - 40) / (rivalCount + 1);
       for (let i = 0; i < rivalCount; i++) {
         rivals.push({
           id: `rival-${i}`,
-          x: 100,
-          y: world === 1 ? 330 : 90 + i * 60,
-          width: 70,
-          height: 40,
-          speedY: Math.random() * 2 + 1,
+          x: 100 * scale,
+          y: 40 + i * laneHeight,
+          width: baseWidth,
+          height: baseHeight,
+          speedY: (Math.random() * 2 + 1) * scale,
           baseSpeedX: baseRivalSpeed * (0.85 + Math.random() * 0.3),
           distance: 0,
           color: `hsl(${Math.random() * 360}, 70%, 50%)`,
@@ -116,8 +145,8 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
 
     const spawnEnemy = () => {
       if (finished || isRaceMode) return;
-      const width = 70;
-      const height = 40;
+      const width = baseWidth;
+      const height = baseHeight;
       const y = Math.random() * (canvas.height - height - 40) + 20;
       const speed = baseRivalSpeed * 0.8 + Math.random() * 2;
       enemies.push({ x: canvas.width + width, y, width, height, speed, color: `hsl(${Math.random() * 360}, 70%, 50%)` });
@@ -126,7 +155,7 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
     const spawnCoin = () => {
       if (finished || isRaceMode) return;
       const y = Math.random() * (canvas.height - 60) + 30;
-      coins.push({ x: canvas.width + 20, y, radius: 10, collected: false });
+      coins.push({ x: canvas.width + 20, y, radius: 10 * scale, collected: false });
     };
 
     const createExplosion = (x: number, y: number, color: string, intense = false) => {
@@ -153,17 +182,37 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
         shurikens.push({
           x: p.x + p.width,
           y: p.y + p.height / 2,
-          radius: 15,
+          radius: 15 * scale,
           speed: 15,
           rotation: 0,
           ownerId
         });
         p.abilityTimer = 500;
       } else if (d.id === 'overlord') {
+        // ... (rest of overlord logic)
         enemies.forEach(e => {
           createExplosion(e.x + e.width/2, e.y + e.height/2, e.color, true);
         });
         enemies.length = 0;
+
+        shurikens.forEach(s => {
+          createExplosion(s.x, s.y, '#94a3b8', true);
+        });
+        shurikens.length = 0;
+
+        missiles.forEach(m => {
+          createExplosion(m.x + m.width/2, m.y + m.height/2, m.color, true);
+        });
+        missiles.length = 0;
+
+        for (let i = shieldCars.length - 1; i >= 0; i--) {
+          const s = shieldCars[i];
+          if (s.ownerId !== ownerId) {
+            createExplosion(s.x + s.width/2, s.y + s.height/2, '#475569', true);
+            shieldCars.splice(i, 1);
+          }
+        }
+        
         p.abilityTimer = 500;
       } else if (d.id === 'nees') {
         if (pHealth < 3) {
@@ -183,16 +232,27 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
         }
       } else if (d.id === 'kalleb') {
         const otherPlayer = ownerId === 1 ? player2 : player;
-        const potentialTargets = [...enemies];
-        if (otherPlayer && otherPlayer.x > p.x) {
-          potentialTargets.push({ ...otherPlayer, isPlayer: true });
+        const potentialTargets = [
+          ...enemies, 
+          ...shieldCars.filter(s => s.ownerId !== ownerId),
+          ...missiles.filter(m => m.ownerId !== ownerId)
+        ];
+        if (otherPlayer && otherPlayer.x > p.x && !otherPlayer.isInvincible) {
+          potentialTargets.push({ ...otherPlayer, isPlayer: true, ownerId: ownerId === 1 ? 2 : 1 });
         }
 
         const targets = potentialTargets
-          .filter(e => e.x > p.x)
+          .filter(e => {
+            const ex = getObjX(e);
+            return ex > p.x;
+          })
           .sort((a, b) => {
-            const distA = Math.sqrt(Math.pow(a.x - p.x, 2) + Math.pow(a.y - p.y, 2));
-            const distB = Math.sqrt(Math.pow(b.x - p.x, 2) + Math.pow(b.y - p.y, 2));
+            const ax = getObjX(a);
+            const ay = a.isPlayer ? (a.ownerId === 1 ? player.y : player2!.y) : a.y;
+            const distA = Math.sqrt(Math.pow(ax - p.x, 2) + Math.pow(ay - p.y, 2));
+            const bx = getObjX(b);
+            const by = b.isPlayer ? (b.ownerId === 1 ? player.y : player2!.y) : b.y;
+            const distB = Math.sqrt(Math.pow(bx - p.x, 2) + Math.pow(by - p.y, 2));
             return distA - distB;
           })
           .slice(0, 3);
@@ -205,12 +265,69 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
             speed: 6,
             vx: 5,
             vy: (i - 1) * 2,
-            width: 20,
-            height: 10,
+            width: 20 * scale,
+            height: 10 * scale,
             color: '#fbbf24',
             ownerId
           });
         }
+        p.abilityTimer = 500;
+      } else if (d.id === 'gojo') {
+        const otherPlayer = ownerId === 1 ? player2 : player;
+        const potentialTargets = [
+          ...enemies, 
+          ...shieldCars.filter(s => s.ownerId !== ownerId),
+          ...missiles.filter(m => m.ownerId !== ownerId)
+        ];
+        if (otherPlayer && !otherPlayer.isInvincible) {
+          potentialTargets.push({ ...otherPlayer, isPlayer: true, ownerId: ownerId === 1 ? 2 : 1 });
+        }
+
+        const target = potentialTargets
+          .filter(e => getObjX(e) > p.x - 100)
+          .sort((a, b) => {
+            const ax = getObjX(a);
+            const ay = a.isPlayer ? (a.ownerId === 1 ? player.y : player2!.y) : a.y;
+            const distA = Math.sqrt(Math.pow(ax - p.x, 2) + Math.pow(ay - p.y, 2));
+            const bx = getObjX(b);
+            const by = b.isPlayer ? (b.ownerId === 1 ? player.y : player2!.y) : b.y;
+            const distB = Math.sqrt(Math.pow(bx - p.x, 2) + Math.pow(by - p.y, 2));
+            return distA - distB;
+          })[0];
+
+        missiles.push({
+          x: p.x + p.width,
+          y: p.y + p.height / 2,
+          target: target || null,
+          speed: 8,
+          vx: 6,
+          vy: 0,
+          width: 40 * scale,
+          height: 40 * scale,
+          color: '#a855f7',
+          ownerId,
+          isVazioRoxo: true
+        });
+        p.abilityTimer = 500;
+      } else if (d.id === 'leader') {
+        const laneHeight = (canvas.height - 40) / 3;
+        const centers = [
+          20 + laneHeight / 2,
+          20 + laneHeight + laneHeight / 2,
+          20 + laneHeight * 2 + laneHeight / 2
+        ];
+        const ownerDist = ownerId === 1 ? distance : distance2;
+        centers.forEach(laneY => {
+          shieldCars.push({
+            distance: ownerDist + 15,
+            y: laneY - (25 * scale),
+            width: 80 * scale,
+            height: 50 * scale,
+            color: '#000000',
+            ownerId,
+            life: 1
+          });
+        });
         p.abilityTimer = 500;
       } else {
         p.abilityTimer = d.id === 'racer' ? 2000 : 
@@ -248,16 +365,32 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
       }
 
       const moveSpeed = car.handling * 1.2;
-      if (keys['w']) player.y -= moveSpeed;
-      if (keys['s']) player.y += moveSpeed;
+      if (world === 3) {
+        // Slippery handling for World 3
+        if (keys['w']) player.vy -= 0.5 * (car.handling / 10);
+        if (keys['s']) player.vy += 0.5 * (car.handling / 10);
+        player.vy *= 0.95; // Friction
+        player.y += player.vy;
+      } else {
+        if (keys['w']) player.y -= moveSpeed;
+        if (keys['s']) player.y += moveSpeed;
+      }
 
       if (player.y < 20) player.y = 20;
       if (player.y > canvas.height - player.height - 20) player.y = canvas.height - player.height - 20;
 
       if (player2 && car2) {
         const moveSpeed2 = car2.handling * 1.2;
-        if (keys['ArrowUp']) player2.y -= moveSpeed2;
-        if (keys['ArrowDown']) player2.y += moveSpeed2;
+        if (world === 3) {
+          // Slippery handling for World 3
+          if (keys['ArrowUp']) player2.vy -= 0.5 * (car2.handling / 10);
+          if (keys['ArrowDown']) player2.vy += 0.5 * (car2.handling / 10);
+          player2.vy *= 0.95; // Friction
+          player2.y += player2.vy;
+        } else {
+          if (keys['ArrowUp']) player2.y -= moveSpeed2;
+          if (keys['ArrowDown']) player2.y += moveSpeed2;
+        }
 
         if (player2.y < 20) player2.y = 20;
         if (player2.y > canvas.height - player2.height - 20) player2.y = canvas.height - player2.height - 20;
@@ -587,6 +720,79 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
         if (p.life <= 0) particles.splice(i, 1);
       }
 
+      for (let i = shieldCars.length - 1; i >= 0; i--) {
+        const s = shieldCars[i];
+        const ownerDist = s.ownerId === 1 ? distance : distance2;
+        const ownerSpeed = s.ownerId === 1 ? p1Speed : p2Speed;
+        
+        // Keep distance constant relative to owner
+        s.distance = ownerDist + 15;
+        
+        const leaderDist = player2 ? Math.max(distance, distance2) : distance;
+        s.x = 100 + (s.distance - leaderDist) * 15;
+        
+        // Collision with enemies
+        for (let j = enemies.length - 1; j >= 0; j--) {
+          const e = enemies[j];
+          if (
+            s.x < e.x + e.width &&
+            s.x + s.width > e.x &&
+            s.y < e.y + e.height &&
+            s.y + s.height > e.y
+          ) {
+            createExplosion(e.x + e.width/2, e.y + e.height/2, e.color, true);
+            enemies.splice(j, 1);
+            createExplosion(s.x + s.width/2, s.y + s.height/2, '#000000', true);
+            shieldCars.splice(i, 1);
+            break;
+          }
+        }
+        if (!shieldCars[i]) continue;
+
+        // Collision with other player in multiplayer
+        if (player2) {
+          const otherPlayer = s.ownerId === 1 ? player2 : player;
+          const isP1Owner = s.ownerId === 1;
+          
+          if (
+            otherPlayer.x < s.x + s.width &&
+            otherPlayer.x + otherPlayer.width > s.x &&
+            otherPlayer.y < s.y + s.height &&
+            otherPlayer.y + otherPlayer.height > s.y
+          ) {
+            if (!otherPlayer.isInvincible) {
+              if (isP1Owner) {
+                currentHealth2 -= 1;
+                setHealth2(currentHealth2);
+              } else {
+                currentHealth -= 1;
+                setHealth(currentHealth);
+              }
+              createExplosion(otherPlayer.x + otherPlayer.width/2, otherPlayer.y + otherPlayer.height/2, '#ff0000', true);
+              otherPlayer.isInvincible = true;
+              otherPlayer.abilityTimer = 1000;
+              
+              createExplosion(s.x + s.width/2, s.y + s.height/2, '#000000', true);
+              shieldCars.splice(i, 1);
+
+              if (currentHealth <= 0 || currentHealth2 <= 0) {
+                let winnerName = "";
+                if (currentHealth <= 0 && currentHealth2 <= 0) {
+                  winnerName = "EMPATE";
+                } else {
+                  winnerName = currentHealth > currentHealth2 ? "Jogador 1" : "Jogador 2";
+                }
+                onGameOver(sessionCoins, Math.floor(distance), 0, true, winnerName);
+                finished = true;
+              }
+              continue;
+            }
+          }
+        }
+
+        if (s.x < -200) shieldCars.splice(i, 1);
+      }
+
       for (let i = shurikens.length - 1; i >= 0; i--) {
         const s = shurikens[i];
         s.x += s.speed;
@@ -604,6 +810,24 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
             enemies.splice(j, 1);
             shurikens.splice(i, 1);
             break;
+          }
+        }
+
+        // Shuriken collision with missiles
+        if (s) {
+          for (let j = missiles.length - 1; j >= 0; j--) {
+            const m = missiles[j];
+            if (s.ownerId !== m.ownerId) {
+              const dx = s.x - (m.x + m.width / 2);
+              const dy = s.y - (m.y + m.height / 2);
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              if (dist < s.radius + m.width / 2) {
+                createExplosion(m.x + m.width / 2, m.y + m.height / 2, m.color, true);
+                missiles.splice(j, 1);
+                shurikens.splice(i, 1);
+                break;
+              }
+            }
           }
         }
 
@@ -657,8 +881,15 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
         const m = missiles[i];
         
         // Homing logic
-        if (m.target && (enemies.includes(m.target) || (m.target.isPlayer && (m.target.ownerId === 1 ? player : player2)))) {
-          const targetX = m.target.isPlayer ? (m.target.ownerId === 1 ? player.x : player2!.x) : m.target.x;
+        const isTargetValid = m.target && (
+          enemies.includes(m.target) || 
+          shieldCars.includes(m.target) ||
+          missiles.includes(m.target) ||
+          (m.target.isPlayer && (m.target.ownerId === 1 ? player : player2))
+        );
+
+        if (m.target && isTargetValid) {
+          const targetX = getObjX(m.target);
           const targetY = m.target.isPlayer ? (m.target.ownerId === 1 ? player.y : player2!.y) : m.target.y;
           const targetWidth = m.target.isPlayer ? (m.target.ownerId === 1 ? player.width : player2!.width) : m.target.width;
           const targetHeight = m.target.isPlayer ? (m.target.ownerId === 1 ? player.height : player2!.height) : m.target.height;
@@ -701,7 +932,8 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
               m.y < player2.y + player2.height &&
               m.y + m.height > player2.y
             ) {
-              currentHealth2 -= 1;
+              const damage = m.isVazioRoxo ? 2 : 1;
+              currentHealth2 -= damage;
               setHealth2(currentHealth2);
               createExplosion(player2.x + player2.width/2, player2.y + player2.height/2, '#ff0000', true);
               player2.isInvincible = true;
@@ -720,7 +952,8 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
               m.y < player.y + player.height &&
               m.y + m.height > player.y
             ) {
-              currentHealth -= 1;
+              const damage = m.isVazioRoxo ? 2 : 1;
+              currentHealth -= damage;
               setHealth(currentHealth);
               createExplosion(player.x + player.width/2, player.y + player.height/2, '#ff0000', true);
               player.isInvincible = true;
@@ -744,11 +977,52 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
             m.y < e.y + e.height &&
             m.y + m.height > e.y
           ) {
-            // Overlord explosion effect (big and powerful)
             createExplosion(e.x + e.width/2, e.y + e.height/2, e.color, true);
             enemies.splice(j, 1);
             missiles.splice(i, 1);
             break;
+          }
+        }
+
+        // Collision with shieldCars
+        if (m) {
+          for (let j = shieldCars.length - 1; j >= 0; j--) {
+            const s = shieldCars[j];
+            if (m.ownerId !== s.ownerId) {
+              if (
+                m.x < s.x + s.width &&
+                m.x + m.width > s.x &&
+                m.y < s.y + s.height &&
+                m.y + m.height > s.y
+              ) {
+                createExplosion(s.x + s.width/2, s.y + s.height/2, '#475569', true);
+                shieldCars.splice(j, 1);
+                missiles.splice(i, 1);
+                break;
+              }
+            }
+          }
+        }
+
+        // Collision with other missiles
+        if (m) {
+          for (let j = missiles.length - 1; j >= 0; j--) {
+            if (i === j) continue;
+            const otherM = missiles[j];
+            if (m.ownerId !== otherM.ownerId) {
+              if (
+                m.x < otherM.x + otherM.width &&
+                m.x + m.width > otherM.x &&
+                m.y < otherM.y + otherM.height &&
+                m.y + m.height > otherM.y
+              ) {
+                createExplosion(m.x + m.width / 2, m.y + m.height / 2, m.color, true);
+                createExplosion(otherM.x + otherM.width / 2, otherM.y + otherM.height / 2, otherM.color, true);
+                missiles.splice(Math.max(i, j), 1);
+                missiles.splice(Math.min(i, j), 1);
+                break;
+              }
+            }
           }
         }
 
@@ -772,17 +1046,31 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
       // Background based on world
       if (world === 1) {
         ctx.fillStyle = '#0f172a'; // Deep blue for city
-      } else {
+      } else if (world === 2) {
         ctx.fillStyle = '#451a03'; // Deep orange/brown for desert
+      } else if (world === 3) {
+        ctx.fillStyle = '#e0f2fe'; // Light blue for ice world
       }
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       // Road
-      ctx.fillStyle = world === 1 ? '#1e293b' : '#78350f';
+      if (world === 1) {
+        ctx.fillStyle = '#1e293b';
+      } else if (world === 2) {
+        ctx.fillStyle = '#78350f';
+      } else if (world === 3) {
+        ctx.fillStyle = '#f8fafc'; // White/Ice road
+      }
       ctx.fillRect(0, 20, canvas.width, canvas.height - 40);
 
       // Road Lines
-      ctx.strokeStyle = world === 1 ? '#334155' : '#92400e';
+      if (world === 1) {
+        ctx.strokeStyle = '#334155';
+      } else if (world === 2) {
+        ctx.strokeStyle = '#92400e';
+      } else if (world === 3) {
+        ctx.strokeStyle = '#bae6fd'; // Light blue lines
+      }
       ctx.lineWidth = 4;
       ctx.setLineDash([40, 40]);
       ctx.lineDashOffset = -roadOffset * 4; // Even faster effect
@@ -801,8 +1089,16 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
 
       // Neon Edges
       ctx.shadowBlur = 15;
-      ctx.shadowColor = world === 1 ? '#2dd4bf' : '#f59e0b';
-      ctx.fillStyle = world === 1 ? '#2dd4bf' : '#f59e0b';
+      if (world === 1) {
+        ctx.shadowColor = '#2dd4bf';
+        ctx.fillStyle = '#2dd4bf';
+      } else if (world === 2) {
+        ctx.shadowColor = '#f59e0b';
+        ctx.fillStyle = '#f59e0b';
+      } else if (world === 3) {
+        ctx.shadowColor = '#38bdf8';
+        ctx.fillStyle = '#38bdf8';
+      }
       ctx.fillRect(0, 18, canvas.width, 4);
       ctx.fillRect(0, canvas.height - 22, canvas.width, 4);
       ctx.shadowBlur = 0;
@@ -884,12 +1180,146 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
 
         ctx.fillStyle = carColor;
         if (d.id === 'ghost' && p.abilityTimer > 0) ctx.globalAlpha = 0.3;
-        ctx.fillRect(p.x, p.y, p.width, p.height);
+
+        // Unique Designs for World 3
+        if (c.id === 'frost') {
+          // Sharp, crystalline wedge with multiple ice shards
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y + p.height / 2);
+          ctx.lineTo(p.x + p.width * 0.3, p.y);
+          ctx.lineTo(p.x + p.width * 0.6, p.y + p.height * 0.2);
+          ctx.lineTo(p.x + p.width, p.y);
+          ctx.lineTo(p.x + p.width * 0.8, p.y + p.height / 2);
+          ctx.lineTo(p.x + p.width, p.y + p.height);
+          ctx.lineTo(p.x + p.width * 0.6, p.y + p.height * 0.8);
+          ctx.lineTo(p.x + p.width * 0.3, p.y + p.height);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          // Shard details
+          ctx.beginPath();
+          ctx.moveTo(p.x + p.width * 0.2, p.y + p.height / 2);
+          ctx.lineTo(p.x + p.width * 0.5, p.y + p.height / 2);
+          ctx.stroke();
+        } else if (c.id === 'glacier') {
+          ctx.fillRect(p.x, p.y, p.width, p.height);
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.moveTo(p.x + 10, p.y);
+          ctx.lineTo(p.x + 20, p.y - 5);
+          ctx.lineTo(p.x + 30, p.y);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(p.x + 40, p.y + p.height);
+          ctx.lineTo(p.x + 50, p.y + p.height + 5);
+          ctx.lineTo(p.x + 60, p.y + p.height);
+          ctx.fill();
+          ctx.fillStyle = carColor;
+        } else if (c.id === 'blizzard') {
+          // Swirling, asymmetrical vortex shape with dynamic wind trails
+          ctx.save();
+          ctx.translate(p.x + p.width / 2, p.y + p.height / 2);
+          ctx.rotate(Date.now() * 0.005);
+          ctx.beginPath();
+          for (let i = 0; i < 5; i++) {
+            const angle = (i * Math.PI * 2) / 5;
+            const r = (p.width / 2) * (0.8 + Math.sin(Date.now() * 0.01 + i) * 0.2);
+            ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+          ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+          ctx.beginPath();
+          ctx.moveTo(p.x - 10, p.y + p.height / 2);
+          ctx.lineTo(p.x + p.width + 10, p.y + p.height / 2);
+          ctx.stroke();
+        } else if (c.id === 'tundra') {
+          // Heavy, wide tank-like design with reinforced front
+          ctx.fillRect(p.x, p.y + 2, p.width, p.height - 4);
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(p.x, p.y - 4, p.width, 6); // Top tread
+          ctx.fillRect(p.x, p.y + p.height - 2, p.width, 6); // Bottom tread
+          ctx.fillStyle = carColor;
+          ctx.fillRect(p.x + p.width - 10, p.y - 2, 10, p.height + 4); // Heavy bumper
+        } else if (c.id === 'avalanche') {
+          // Massive, tiered structure like a heavy snow-plow
+          ctx.fillRect(p.x, p.y + p.height * 0.2, p.width * 0.6, p.height * 0.6);
+          ctx.beginPath();
+          ctx.moveTo(p.x + p.width * 0.6, p.y);
+          ctx.lineTo(p.x + p.width, p.y + p.height / 2);
+          ctx.lineTo(p.x + p.width * 0.6, p.y + p.height);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(p.x + p.width * 0.2, p.y + p.height * 0.3, p.width * 0.3, p.height * 0.4);
+          ctx.fillStyle = carColor;
+        } else if (c.id === 'aurora') {
+          // Sleek, flowing organic shape with shifting colors
+          const gradient = ctx.createLinearGradient(p.x, p.y, p.x + p.width, p.y + p.height);
+          gradient.addColorStop(0, carColor);
+          gradient.addColorStop(0.5, '#4ade80');
+          gradient.addColorStop(1, '#2dd4bf');
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y + p.height / 2);
+          ctx.bezierCurveTo(p.x + p.width * 0.2, p.y - 10, p.x + p.width * 0.8, p.y - 10, p.x + p.width, p.y + p.height / 2);
+          ctx.bezierCurveTo(p.x + p.width * 0.8, p.y + p.height + 10, p.x + p.width * 0.2, p.y + p.height + 10, p.x, p.y + p.height / 2);
+          ctx.fill();
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = '#4ade80';
+        } else if (c.id === 'crystal') {
+          // Cluster of crystals with internal pulsing glow
+          const pulse = Math.sin(Date.now() * 0.01) * 0.2 + 0.8;
+          ctx.globalAlpha = pulse;
+          for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            const ox = i * 15;
+            ctx.moveTo(p.x + ox, p.y + p.height / 2);
+            ctx.lineTo(p.x + ox + 20, p.y);
+            ctx.lineTo(p.x + ox + 40, p.y + p.height / 2);
+            ctx.lineTo(p.x + ox + 20, p.y + p.height);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+        } else if (c.id === 'borealis') {
+          // Ethereal, flowing wave shape with multiple layers
+          ctx.globalAlpha = 0.7;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y + p.height / 2);
+          for (let i = 0; i <= p.width; i += 2) {
+            ctx.lineTo(p.x + i, p.y + p.height / 2 + Math.sin(i * 0.15 + Date.now() * 0.01) * 12);
+          }
+          ctx.lineTo(p.x + p.width, p.y + p.height);
+          ctx.lineTo(p.x, p.y + p.height);
+          ctx.closePath();
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y + p.height / 2);
+          for (let i = 0; i <= p.width; i += 2) {
+            ctx.lineTo(p.x + i, p.y + p.height / 2 - Math.sin(i * 0.15 + Date.now() * 0.01) * 12);
+          }
+          ctx.lineTo(p.x + p.width, p.y);
+          ctx.lineTo(p.x, p.y);
+          ctx.closePath();
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        } else {
+          ctx.fillRect(p.x, p.y, p.width, p.height);
+        }
+
         ctx.globalAlpha = 1;
         
         ctx.shadowBlur = 0;
-        ctx.fillStyle = c.id === 'phantom' ? '#334155' : '#94a3b8';
-        ctx.fillRect(p.x + 40, p.y + 5, 15, p.height - 10);
+        if (c.id !== 'blizzard' && c.id !== 'frost' && c.id !== 'borealis') {
+          ctx.fillStyle = c.id === 'phantom' ? '#334155' : '#94a3b8';
+          ctx.fillRect(p.x + 40, p.y + 5, 15, p.height - 10);
+        }
         ctx.fillStyle = headlightColor;
         ctx.fillRect(p.x + p.width - 6, p.y + 2, 4, 8);
         ctx.fillRect(p.x + p.width - 6, p.y + p.height - 10, 4, 8);
@@ -914,6 +1344,18 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
         ctx.shadowBlur = 0;
       });
 
+      shieldCars.forEach(s => {
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(s.x, s.y, s.width, s.height);
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(s.x, s.y, s.width, s.height);
+        
+        // Windows
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(s.x + 40, s.y + 5, 15, s.height - 10);
+      });
+
       shurikens.forEach(s => {
         ctx.save();
         ctx.translate(s.x, s.y);
@@ -933,12 +1375,28 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
       missiles.forEach(m => {
         ctx.save();
         ctx.translate(m.x, m.y);
-        const angle = Math.atan2(m.vy, m.vx);
-        ctx.rotate(angle);
-        ctx.fillStyle = m.color;
-        ctx.fillRect(0, 0, m.width, m.height);
-        ctx.fillStyle = '#f97316';
-        ctx.fillRect(-10, 2, 10, 6);
+        if (m.isVazioRoxo) {
+          // Purple ball
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = '#a855f7';
+          ctx.fillStyle = '#a855f7';
+          ctx.beginPath();
+          ctx.arc(m.width / 2, m.height / 2, m.width / 2, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Inner core
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(m.width / 2, m.height / 2, m.width / 4, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          const angle = Math.atan2(m.vy, m.vx);
+          ctx.rotate(angle);
+          ctx.fillStyle = m.color;
+          ctx.fillRect(0, 0, m.width, m.height);
+          ctx.fillStyle = '#f97316';
+          ctx.fillRect(-10, 2, 10, 6);
+        }
         ctx.restore();
       });
 
@@ -1055,19 +1513,13 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
       window.removeEventListener('touchend', handleTouchEnd);
       cancelAnimationFrame(animationId);
     };
-}, [
-  car.id,
-  driver.id,
-  car2?.id,
-  driver2?.id,
-  mode,
-  level,
-  targetDistance
-]);
+  }, [car, driver, car2, driver2, onGameOver, mode, level, targetDistance, dimensions]);
+
   return (
-    <div className="relative flex flex-col items-center justify-center w-full h-full bg-slate-900 text-white font-sans p-4">
-      <div className="w-full max-w-4xl relative">
-        <div className="absolute top-4 left-4 flex flex-col gap-4 z-10">
+    <div className="fixed inset-0 bg-slate-950 flex items-center justify-center overflow-hidden">
+      <div className="relative w-full h-full">
+        
+        <div className="absolute top-4 left-4 z-10 flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Jogador 1</div>
             <div className="flex gap-1">
@@ -1116,9 +1568,7 @@ export default function Game({ car, driver, car2, driver2, mode, world = 1, leve
 
         <canvas
           ref={canvasRef}
-          width={800}
-          height={400}
-          className="w-full aspect-[2/1] rounded-xl shadow-2xl border-4 border-slate-700 bg-slate-800"
+          className="w-full h-full bg-slate-800"
         />
         
         {(mode === 'levels' || mode === 'multiplayer') && (

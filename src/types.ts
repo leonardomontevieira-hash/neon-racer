@@ -1,7 +1,8 @@
 export type CarId = 'basic' | 'sport' | 'heavy' | 'hover' | 'phantom' | 'beast' | 'neon' | 'kaiser' | 
-  'vortex' | 'titan' | 'glider' | 'shadow' | 'zenith' | 'omega' | 'nebula' | 'void';
+  'vortex' | 'titan' | 'glider' | 'shadow' | 'zenith' | 'omega' | 'nebula' | 'void' |
+  'frost' | 'glacier' | 'blizzard' | 'tundra' | 'avalanche' | 'aurora' | 'crystal' | 'borealis';
 export type DriverId = 'rookie' | 'racer' | 'bruiser' | 'collector' | 'maruto' | 'ghost' | 'tech' | 'nees' | 
-  'overlord' | 'chrono' | 'mender' | 'stellar' | 'prime' | 'kalleb';
+  'overlord' | 'chrono' | 'mender' | 'stellar' | 'prime' | 'kalleb' | 'leader' | 'gojo';
 
 export interface Car {
   id: CarId;

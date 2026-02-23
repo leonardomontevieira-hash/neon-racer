@@ -9,8 +9,8 @@ interface ModeSelectionProps {
 
 export default function ModeSelection({ onNavigate, onSelectMode }: ModeSelectionProps) {
   return (
-    <div className="flex flex-col items-center min-h-screen bg-slate-900 text-white p-6 overflow-y-auto overflow-x-hidden">
-      <div className="max-w-md w-full py-12">
+    <div className="h-full w-full bg-slate-900 text-white p-6 overflow-y-auto overflow-x-hidden scroll-smooth">
+      <div className="max-w-md mx-auto py-12 flex flex-col items-center">
         <div className="flex items-center mb-12">
           <button
             onClick={() => onNavigate('menu')}

@@ -19,7 +19,17 @@ export const CARS: Record<CarId, Car> = {
   zenith: { id: 'zenith', name: 'Zenith', description: 'O ápice da tecnologia automotiva.', speed: 10, handling: 10, color: '#facc15', cost: 5000, world: 2 },
   omega: { id: 'omega', name: 'Omega', description: 'O fim de todas as corridas.', speed: 12, handling: 8, color: '#dc2626', cost: 6500, world: 2 },
   nebula: { id: 'nebula', name: 'Nebula', description: 'Brilha com a energia das estrelas.', speed: 11, handling: 11, color: '#ec4899', cost: 8000, world: 2 },
-  void: { id: 'void', name: 'Void', description: 'Nada pode escapar de sua velocidade.', speed: 15, handling: 15, color: '#000000', cost: 10000, world: 2 }
+  void: { id: 'void', name: 'Void', description: 'Nada pode escapar de sua velocidade.', speed: 15, handling: 15, color: '#000000', cost: 10000, world: 2 },
+
+  // Mundo 3
+  frost: { id: 'frost', name: 'Frost', description: 'Design angular para cortar o gelo.', speed: 6, handling: 12, color: '#e0f2fe', cost: 2000, world: 3 },
+  glacier: { id: 'glacier', name: 'Glacier', description: 'Um monólito de gelo sobre rodas.', speed: 5, handling: 14, color: '#bae6fd', cost: 3000, world: 3 },
+  blizzard: { id: 'blizzard', name: 'Blizzard', description: 'Aerodinâmica inspirada em tempestades.', speed: 7, handling: 13, color: '#7dd3fc', cost: 4500, world: 3 },
+  tundra: { id: 'tundra', name: 'Tundra', description: 'Resistência extrema para o frio polar.', speed: 6, handling: 15, color: '#38bdf8', cost: 6000, world: 3 },
+  avalanche: { id: 'avalanche', name: 'Avalanche', description: 'Poder bruto e controle total.', speed: 8, handling: 14, color: '#0ea5e9', cost: 8000, world: 3 },
+  aurora: { id: 'aurora', name: 'Aurora', description: 'Elegância e luz nas curvas gélidas.', speed: 9, handling: 16, color: '#2dd4bf', cost: 10000, world: 3 },
+  crystal: { id: 'crystal', name: 'Crystal', description: 'Refração de luz e precisão milimétrica.', speed: 10, handling: 18, color: '#f0f9ff', cost: 15000, world: 3 },
+  borealis: { id: 'borealis', name: 'Borealis', description: 'O fenômeno definitivo do Ártico.', speed: 12, handling: 20, color: '#4ade80', cost: 25000, world: 3 }
 };
 
 export const DRIVERS: Record<DriverId, Driver> = {
@@ -33,18 +43,21 @@ export const DRIVERS: Record<DriverId, Driver> = {
   tech: { id: 'tech', name: 'Tecnólogo', description: 'Mestre da computação.', abilityName: 'Hack de Tempo', abilityDescription: 'Reduz a velocidade de tudo ao redor por 5 segundos.', cost: 800, world: 1 },
   kalleb: { id: 'kalleb', name: 'Kalleb', description: 'Mestre da artilharia pesada.', abilityName: 'Mísseis Homing', abilityDescription: 'Lança 3 mísseis teleguiados nos inimigos mais próximos.', cost: 1500, world: 1 },
   nees: { id: 'nees', name: 'Nees', description: 'Especialista em reparos.', abilityName: 'Reparo Rápido', abilityDescription: 'Recupera 1 ponto de vida se o carro estiver danificado.', cost: 1800, world: 1 },
+  leader: { id: 'leader', name: 'Líder', description: 'Um estrategista nato.', abilityName: 'Escolta', abilityDescription: 'Invoca 3 carros pretos de escolta que protegem o jogador.', cost: 2500, world: 2 },
   
   // Mundo 2
   overlord: { id: 'overlord', name: 'Soberano', description: 'Domina as pistas com punho de ferro.', abilityName: 'Onda de Choque', abilityDescription: 'Limpa todos os inimigos da tela instantaneamente.', cost: 2500, world: 2 },
   chrono: { id: 'chrono', name: 'Chrono', description: 'Controla o fluxo do tempo.', abilityName: 'Parada Temporal', abilityDescription: 'Congela todos os inimigos por 3 segundos.', cost: 3000, world: 2 },
   mender: { id: 'mender', name: 'Mender', description: 'Nanotecnologia de reparo.', abilityName: 'Auto-Reparo', abilityDescription: 'Recupera toda a vida do carro.', cost: 4500, world: 2 },
-  stellar: { id: 'stellar', name: 'Stellar', description: 'Energia cósmica pura.', abilityName: 'Supernova', abilityDescription: 'Fica invencível e ultra rápido por 8 segundos.', cost: 9000, world: 2 },
+  stellar: { id: 'stellar', name: 'Senna', description: 'Energia cósmica pura.', abilityName: 'Supernova', abilityDescription: 'Fica invencível e ultra rápido por 8 segundos.', cost: 9000, world: 2 },
+  gojo: { id: 'gojo', name: 'Gojo', description: 'O feiticeiro mais forte.', abilityName: 'Vazio Roxo', abilityDescription: 'Lança uma esfera de energia que persegue e destrói o alvo.', cost: 12000, world: 3 },
   prime: { id: 'prime', name: 'Prime', description: 'O motorista definitivo.', abilityName: 'Modo Deus', abilityDescription: 'Invencibilidade, velocidade e ímã permanentes por 10s.', cost: 15000, world: 0 }
 };
 
 export const WORLDS = {
   1: { name: 'Cidade Neon', description: 'As ruas iluminadas da metrópole.', color: '#2dd4bf', levels: 10 },
-  2: { name: 'Cyber Deserto', description: 'Dunas tecnológicas e perigosas.', color: '#f59e0b', levels: 15 }
+  2: { name: 'Cyber Deserto', description: 'Dunas tecnológicas e perigosas.', color: '#f59e0b', levels: 15 },
+  3: { name: 'Gelo Eterno', description: 'Pistas escorregadias e perigosas.', color: '#38bdf8', levels: 15 }
 };
 
 export const LEVELS_COUNT = 10; // Legacy, but keeping for compatibility if needed
@@ -66,6 +79,9 @@ export const INITIAL_STATE: PlayerState = {
       ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [i + 2, { stars: 0, unlocked: false }]))
     },
     2: {
+      ...Object.fromEntries(Array.from({ length: 15 }, (_, i) => [i + 1, { stars: 0, unlocked: false }]))
+    },
+    3: {
       ...Object.fromEntries(Array.from({ length: 15 }, (_, i) => [i + 1, { stars: 0, unlocked: false }]))
     }
   },

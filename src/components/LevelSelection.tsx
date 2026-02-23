@@ -11,11 +11,12 @@ interface LevelSelectionProps {
 }
 
 export default function LevelSelection({ onNavigate, world, levels, onSelectLevel }: LevelSelectionProps) {
-  const levelsCount = WORLDS[world as keyof typeof WORLDS].levels;
+  const worldData = WORLDS[world as keyof typeof WORLDS];
+  const levelsCount = worldData?.levels || 0;
 
   return (
-    <div className="flex flex-col items-center min-h-screen bg-slate-900 text-white p-6 overflow-y-auto overflow-x-hidden">
-      <div className="max-w-4xl w-full mx-auto py-12">
+    <div className="h-full w-full bg-slate-900 text-white p-6 overflow-y-auto overflow-x-hidden scroll-smooth">
+      <div className="max-w-4xl w-full mx-auto py-12 flex flex-col">
         <div className="flex items-center mb-12">
           <button
             onClick={() => onNavigate('world_select')}
@@ -28,7 +29,7 @@ export default function LevelSelection({ onNavigate, world, levels, onSelectLeve
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
           {Array.from({ length: levelsCount }, (_, i) => i + 1).map((levelNum) => {
-            const level = levels[levelNum];
+            const level = levels ? levels[levelNum] : null;
             const isUnlocked = level?.unlocked;
 
             return (

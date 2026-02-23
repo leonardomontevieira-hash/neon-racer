@@ -12,23 +12,32 @@ interface WorldSelectionProps {
 export default function WorldSelection({ onNavigate, levels, onSelectWorld }: WorldSelectionProps) {
   const isWorldUnlocked = (worldId: number) => {
     if (worldId === 1) return true;
-    // World 2 unlocks if all levels of World 1 are completed (at least 1 star)
-    const world1Levels = levels[1];
-    return Object.values(world1Levels).every(l => l.stars > 0);
+    if (worldId === 2) {
+      const world1Levels = levels[1];
+      return Object.values(world1Levels).every(l => l.stars > 0);
+    }
+    if (worldId === 3) {
+      const world2Levels = levels[2];
+      return Object.values(world2Levels).every(l => l.stars > 0);
+    }
+    return false;
   };
 
   const getWorldStars = (worldId: number) => {
     const worldLevels = levels[worldId];
+    if (!worldLevels) return 0;
     return Object.values(worldLevels).reduce((acc, l) => acc + l.stars, 0);
   };
 
   const getMaxStars = (worldId: number) => {
-    return WORLDS[worldId as keyof typeof WORLDS].levels * 3;
+    const world = WORLDS[worldId as keyof typeof WORLDS];
+    if (!world) return 0;
+    return world.levels * 3;
   };
 
   return (
-    <div className="flex flex-col items-center min-h-screen bg-slate-900 text-white p-6 overflow-y-auto overflow-x-hidden">
-      <div className="max-w-4xl w-full mx-auto py-12">
+    <div className="h-full w-full bg-slate-900 text-white p-6 overflow-y-auto overflow-x-hidden scroll-smooth">
+      <div className="max-w-4xl w-full mx-auto py-12 flex flex-col">
         <div className="flex items-center mb-8">
           <button
             onClick={() => onNavigate('mode_select')}
@@ -59,7 +68,9 @@ export default function WorldSelection({ onNavigate, levels, onSelectWorld }: Wo
                 {!unlocked && (
                   <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] rounded-3xl flex flex-col items-center justify-center z-10">
                     <Lock className="w-12 h-12 text-slate-500 mb-2" />
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Complete o Mundo 1</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                      Complete o Mundo {worldId - 1}
+                    </p>
                   </div>
                 )}
 
